@@ -214,66 +214,35 @@ def _display_charts(filtered_df):
     """Display analysis charts"""
     st.markdown("## 📈 IV Analysis Charts")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        # IV vs Expected Move scatter plot
-        fig_scatter = px.scatter(
-            filtered_df,
-            x='implied_volatility',
-            y='expected_move_percent',
-            color='sector',
-            size='current_price',
-            hover_data=['symbol', 'company_name', 'earnings_date'],
-            title='IV vs Expected Move',
-            labels={
-                'implied_volatility': 'Implied Volatility (%)',
-                'expected_move_percent': 'Expected Move (%)'
-            }
-        )
-        fig_scatter.update_layout(height=400)
-        st.plotly_chart(fig_scatter, use_container_width=True)
+    # Expected Move $ vs Stock Price (expanded full width)
+    st.markdown("### 💰 Expected Move $ vs Stock Price")
+    fig_move_price = px.scatter(
+        filtered_df,
+        x='current_price',
+        y='expected_move_dollar',
+        color='implied_volatility',
+        size='expected_move_percent',
+        hover_data=['symbol', 'company_name', 'earnings_date', 'expected_move_up', 'expected_move_down'],
+        title='Expected Move $ vs Stock Price (sized by Expected Move %)',
+        labels={
+            'current_price': 'Stock Price ($)',
+            'expected_move_dollar': 'Expected Move ($)',
+            'implied_volatility': 'IV (%)',
+            'expected_move_percent': 'Expected Move %'
+        }
+    )
+    fig_move_price.update_layout(height=500)
+    st.plotly_chart(fig_move_price, use_container_width=True)
     
-    with col2:
-        # IV Distribution histogram
-        fig_hist = px.histogram(
-            filtered_df,
-            x='implied_volatility',
-            nbins=20,
-            title='IV Distribution',
-            labels={'implied_volatility': 'Implied Volatility (%)', 'count': 'Number of Stocks'}
-        )
-        fig_hist.update_layout(height=400)
-        st.plotly_chart(fig_hist, use_container_width=True)
-    
-    # Additional analysis
-    col1, col2 = st.columns(2)
-    with col1:
-        # Expected Move vs Current Price
-        fig_move_price = px.scatter(
-            filtered_df,
-            x='current_price',
-            y='expected_move_dollar',
-            color='implied_volatility',
-            hover_data=['symbol', 'company_name'],
-            title='Expected Move $ vs Stock Price',
-            labels={
-                'current_price': 'Stock Price ($)',
-                'expected_move_dollar': 'Expected Move ($)',
-                'implied_volatility': 'IV (%)'
-            }
-        )
-        fig_move_price.update_layout(height=400)
-        st.plotly_chart(fig_move_price, use_container_width=True)
-    
-    with col2:
-        # Expected Move Range Analysis
-        fig_range = px.bar(
-            filtered_df.nlargest(10, 'expected_move_percent'),
-            x='symbol',
-            y='expected_move_percent',
-            title='Top 10 Biggest Expected Moves',
-            labels={'expected_move_percent': 'Expected Move (%)'},
-            hover_data=['expected_move_up', 'expected_move_down', 'company_name', 'earnings_date']
-        )
-        fig_range.update_layout(height=400)
-        st.plotly_chart(fig_range, use_container_width=True)
+    # Third row: Top 10 Biggest Expected Moves
+    st.markdown("### 🚀 Top Movers")
+    fig_range = px.bar(
+        filtered_df.nlargest(10, 'expected_move_percent'),
+        x='symbol',
+        y='expected_move_percent',
+        title='Top 10 Biggest Expected Moves',
+        labels={'expected_move_percent': 'Expected Move (%)'},
+        hover_data=['expected_move_up', 'expected_move_down', 'company_name', 'earnings_date']
+    )
+    fig_range.update_layout(height=400)
+    st.plotly_chart(fig_range, use_container_width=True)
