@@ -622,12 +622,12 @@ def analytics():
 def options_iv_analysis():
     """Options IV Analysis page"""
     st.markdown("# 📊 Options IV Analysis")
-    st.markdown("**Implied volatility and expected move analysis for earnings plays**")
-    st.markdown("💡 *Focus on stocks with earnings this week for the most relevant trading opportunities*")
+    st.markdown("**Implied volatility and expected move analysis for upcoming earnings plays**")
+    st.markdown("💡 *Only showing stocks with today's and future earnings dates - past earnings IV data is not relevant*")
     
     # Add sync options data section
     with st.expander("🔧 Sync Options Data", expanded=False):
-        st.markdown("*Fetch IV data for stocks with upcoming earnings*")
+        st.markdown("*Fetch IV data for stocks with upcoming earnings only*")
         sync_options_data()
     
     # Get options data from database
@@ -638,19 +638,41 @@ def options_iv_analysis():
         st.warning("No options data available. Please sync data first using the button above.")
         return
     
-    # Metrics
+    # Filter out stocks with past earnings dates (CRITICAL FIX)
+    from datetime import datetime
+    today = datetime.now().date().strftime('%Y-%m-%d')
+    
+    # Only show stocks with future earnings (including today) or no earnings date
+    future_earnings_df = options_df[
+        (options_df['earnings_date'] == 'N/A') | 
+        (options_df['earnings_date'] >= today)
+    ].copy()
+    
+    # Show warning if we filtered out past earnings
+    past_earnings_count = len(options_df) - len(future_earnings_df)
+    if past_earnings_count > 0:
+        st.warning(f"⚠️ Filtered out {past_earnings_count} stocks with past earnings dates. Expected move analysis is only relevant for today's and upcoming earnings.")
+    
+    if future_earnings_df.empty:
+        st.info("📅 No stocks with upcoming earnings found in options data. Please sync data for stocks with future earnings dates.")
+        return
+    
+    # Use filtered data for the rest of the analysis
+    options_df = future_earnings_df
+    
+    # Metrics (only for upcoming earnings)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Symbols", len(options_df))
+        st.metric("Upcoming Earnings", len(options_df))
     with col2:
         avg_iv = options_df['implied_volatility'].mean()
-        st.metric("Average IV", f"{avg_iv:.1f}%", help="Average implied volatility across all options")
+        st.metric("Average IV", f"{avg_iv:.1f}%", help="Average implied volatility for upcoming earnings")
     with col3:
         avg_expected_move = options_df['expected_move_percent'].mean()
-        st.metric("Avg Expected Move", f"{avg_expected_move:.1f}%", help="Average expected stock move based on straddle pricing")
+        st.metric("Avg Expected Move", f"{avg_expected_move:.1f}%", help="Average expected move for upcoming earnings")
     with col4:
         high_iv_count = len(options_df[options_df['implied_volatility'] > 50])
-        st.metric("High IV (>50%)", high_iv_count, help="Number of stocks with IV above 50%")
+        st.metric("High IV (>50%)", high_iv_count, help="High volatility upcoming earnings")
     
     # Filters
     st.markdown("## 🎛️ Filters")
@@ -671,9 +693,9 @@ def options_iv_analysis():
     
     with col1:
         time_filter = st.selectbox(
-            "Show stocks with earnings:",
-            ["This Week (Current)", "Next Week", "This Month", "Next 30 Days", "All Upcoming", "Custom Date Range"],
-            help="Select which time period to focus on for earnings"
+            "Show upcoming earnings for:",
+            ["This Week", "Next 7 Days", "Next 14 Days", "This Month", "Next 30 Days", "Next 60 Days", "Custom Date Range"],
+            help="Select time period for upcoming earnings (past earnings filtered out)"
         )
     
     with col2:
@@ -681,42 +703,43 @@ def options_iv_analysis():
             custom_start = st.date_input("Start Date", datetime.now().date())
             custom_end = st.date_input("End Date", datetime.now().date() + timedelta(days=7))
     
-    # Calculate date range based on selection
+    # Calculate date range based on selection (all future-focused)
     from datetime import datetime, timedelta 
     today = datetime.now().date()
     
-    if time_filter == "This Week (Current)":
-        start_of_week = today - timedelta(days=today.weekday())  # Monday
-        end_of_week = start_of_week + timedelta(days=6)  # Sunday
-        filter_start, filter_end = start_of_week, end_of_week
+    if time_filter == "This Week":
+        # From today to end of current week (Sunday)
+        days_until_sunday = 6 - today.weekday()  # weekday() returns 0=Monday, 6=Sunday
+        filter_start, filter_end = today, today + timedelta(days=days_until_sunday)
         
-    elif time_filter == "Next Week":
-        start_of_next_week = today - timedelta(days=today.weekday()) + timedelta(days=7)
-        end_of_next_week = start_of_next_week + timedelta(days=6)
-        filter_start, filter_end = start_of_next_week, end_of_next_week
+    elif time_filter == "Next 7 Days":
+        filter_start, filter_end = today, today + timedelta(days=7)
+        
+    elif time_filter == "Next 14 Days":
+        filter_start, filter_end = today, today + timedelta(days=14)
         
     elif time_filter == "This Month":
-        start_of_month = today.replace(day=1)
+        # From today to end of current month
         if today.month == 12:
             end_of_month = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
         else:
             end_of_month = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
-        filter_start, filter_end = start_of_month, end_of_month
+        filter_start, filter_end = today, end_of_month
         
     elif time_filter == "Next 30 Days":
         filter_start, filter_end = today, today + timedelta(days=30)
         
+    elif time_filter == "Next 60 Days":
+        filter_start, filter_end = today, today + timedelta(days=60)
+        
     elif time_filter == "Custom Date Range":
         filter_start, filter_end = custom_start, custom_end
         
-    else:  # "All Upcoming"
+    else:  # Default fallback
         filter_start, filter_end = today, today + timedelta(days=365)
     
     # Show selected date range
-    if time_filter != "All Upcoming":
-        st.info(f"📅 Showing stocks with earnings: {filter_start.strftime('%B %d')} - {filter_end.strftime('%B %d, %Y')}")
-    else:
-        st.info(f"📅 Showing all upcoming earnings (next 365 days)")
+    st.info(f"📅 Showing upcoming earnings: {filter_start.strftime('%B %d')} - {filter_end.strftime('%B %d, %Y')}")
     
     # Apply filters
     filtered_df = options_df[
@@ -746,7 +769,7 @@ def options_iv_analysis():
             (filtered_df['earnings_date'] != 'N/A') &
             (filtered_df['earnings_date'] >= today_str)
         ]
-    
+    st.write(filtered_df)
     # Summary after filters
     st.markdown(f"## 📋 Options Data ({len(filtered_df)} symbols shown)")
     
@@ -853,85 +876,92 @@ def options_iv_analysis():
         st.plotly_chart(fig_range, use_container_width=True)
 
 def sync_options_data():
-    """Sync options IV data for stocks with upcoming earnings"""
+    """Sync options IV data for stocks with upcoming earnings only"""
     from earnings_bot import EarningsBot
     from datetime import datetime, timedelta
     
-    # Let user choose what to sync
+    st.markdown("**⚠️ Important**: Options IV analysis is only meaningful for stocks with upcoming earnings (not past earnings)")
+
+    # --- Step 1: Selection UI ---
     sync_option = st.radio(
-        "What stocks to sync IV data for:",
-        ["This Week Only", "Next 2 Weeks", "All Upcoming Earnings", "Custom Selection"],
+        "Sync IV data for stocks with earnings:",
+        ["This Week", "Next 7 Days", "Next 14 Days", "Next 30 Days", "Custom Selection"],
         horizontal=True,
-        key="sync_option_radio"
+        key="sync_option_radio",
+        help="Only upcoming earnings are relevant for options analysis"
     )
-    
-    selected_symbols = []
+
+    today = datetime.now().date()
+    symbols_to_sync = []
+    period_name = ""
+
     if sync_option == "Custom Selection":
         all_symbols = EarningsBot().load_tickers_from_json()
         selected_symbols = st.multiselect(
-            "Select specific symbols:",
+            "Select specific symbols (only those with upcoming earnings are useful):",
             all_symbols,
             default=["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA"],
             key="custom_symbols_select"
         )
-        if not selected_symbols:
-            st.warning("Please select at least one symbol to sync.")
-            return
+        if selected_symbols:
+            symbols_to_sync = selected_symbols
+            period_name = f"{len(symbols_to_sync)} selected symbols"
+    else:
+        if sync_option == "This Week":
+            start_date, end_date = today, today + timedelta(days=6 - today.weekday())
+            period_name = "this week"
+        elif sync_option == "Next 7 Days":
+            start_date, end_date = today, today + timedelta(days=7)
+            period_name = "the next 7 days"
+        elif sync_option == "Next 14 Days":
+            start_date, end_date = today, today + timedelta(days=14)
+            period_name = "the next 14 days"
+        else: # "Next 30 Days"
+            start_date, end_date = today, today + timedelta(days=30)
+            period_name = "the next 30 days"
+        
+        st.info(f"📅 Selected period: {start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}")
+        database = init_database()
+        earnings_data = database.get_earnings_by_week(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+        
+        # Filter out past earnings from the selection
+        earnings_data = earnings_data[earnings_data['earnings_date'] >= today.strftime('%Y-%m-%d')]
+
+        if not earnings_data.empty:
+            symbols_to_sync = earnings_data['symbol'].unique().tolist()
+
+    # --- Step 2: Confirmation and Execution ---
+    if not symbols_to_sync:
+        st.warning("No symbols selected or found for the chosen period. Please adjust your selection.")
+        return
+
+    st.markdown("---")
+    st.subheader(f"Step 2: Confirm and Sync for {period_name}")
     
-    # Single sync button that triggers immediately
-    if st.button("🚀 Start Sync", type="primary", key="start_sync_btn"):
-        with st.spinner("Fetching options data..."):
+    st.info(f"Found {len(symbols_to_sync)} stocks to sync: `{', '.join(symbols_to_sync[:20])}{'...' if len(symbols_to_sync) > 20 else ''}`")
+
+    proceed_to_sync = True
+    if len(symbols_to_sync) > 40:
+        st.warning(f"⚠️ This is a large sync operation with {len(symbols_to_sync)} stocks. It may take several minutes.")
+        if not st.checkbox(f"I understand and want to proceed with syncing {len(symbols_to_sync)} stocks.", key="large_sync_confirm"):
+            proceed_to_sync = False
+
+    if not proceed_to_sync:
+        st.info("Sync cancelled. Please confirm above to proceed with a large sync.")
+        return
+
+    if st.button(f"🚀 Run Sync for {len(symbols_to_sync)} Stocks", type="primary"):
+        database = init_database()
+        with st.spinner("Fetching FRESH options data from the market..."):
             bot = EarningsBot()
-            database = init_database()
-            
-            # Determine which stocks to sync based on selection
-            if sync_option == "Custom Selection":
-                symbols = selected_symbols
-                st.info(f"Syncing IV data for {len(symbols)} selected symbols")
-                
-            else:
-                # Get date range based on selection
-                today = datetime.now().date()
-                
-                if sync_option == "This Week Only":
-                    start_of_week = today - timedelta(days=today.weekday())
-                    end_of_week = start_of_week + timedelta(days=6)
-                    date_range = (start_of_week, end_of_week)
-                    
-                elif sync_option == "Next 2 Weeks":
-                    start_date = today
-                    end_date = today + timedelta(days=14)
-                    date_range = (start_date, end_date)
-                    
-                else:  # "All Upcoming Earnings"
-                    start_date = today
-                    end_date = today + timedelta(days=60)  # Next 2 months
-                    date_range = (start_date, end_date)
-                
-                st.info(f"Looking for stocks with earnings between {date_range[0]} and {date_range[1]}")
-                
-                # Get stocks with earnings in the selected period
-                earnings_data = database.get_earnings_by_week(
-                    date_range[0].strftime('%Y-%m-%d'), 
-                    date_range[1].strftime('%Y-%m-%d')
-                )
-        
-                if earnings_data.empty:
-                    st.warning(f"No stocks found with earnings in the selected period. Please sync earnings data first.")
-                    return
-                
-                # Get unique symbols with earnings in the period
-                symbols = earnings_data['symbol'].unique().tolist()
-                st.success(f"Found {len(symbols)} stocks with earnings in selected period: {', '.join(symbols[:10])}{'...' if len(symbols) > 10 else ''}")
-        
             progress_bar = st.progress(0)
             status_text = st.empty()
             
             options_data = []
-            for i, symbol in enumerate(symbols):
-                status_text.text(f"Processing {symbol} ({i+1}/{len(symbols)})")
+            for i, symbol in enumerate(symbols_to_sync):
+                status_text.text(f"Processing {symbol} ({i+1}/{len(symbols_to_sync)})")
                 
-                # Get IV data
+                # Fetch fresh IV data from the market
                 iv_data = bot.get_options_iv_data(symbol)
                 if iv_data:
                     # Get IV crush estimate
@@ -940,19 +970,19 @@ def sync_options_data():
                         iv_data.update(crush_data)
                     options_data.append(iv_data)
                 
-                progress_bar.progress((i + 1) / len(symbols))
-            
+                progress_bar.progress((i + 1) / len(symbols_to_sync))
+
             # Insert into database
             if options_data:
                 count = database.insert_options_data(options_data)
-                st.success(f"Successfully synced {count} options records!")
+                st.success(f"✅ Successfully synced {count} options records!")
             else:
-                st.warning("No options data was retrieved. This could be due to market hours or data availability.")
+                st.warning("No relevant options data could be fetched. The selected stocks may not have active options chains.")
             
             progress_bar.empty()
             status_text.empty()
             
-            # Refresh the page
+            # Refresh the page to show new data
             st.rerun()
 
 if __name__ == "__main__":

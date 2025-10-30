@@ -8,6 +8,7 @@ import pandas as pd
 from datetime import datetime
 from typing import List, Dict, Optional
 import os
+import pytz
 
 
 class EarningsDatabase:
@@ -35,8 +36,8 @@ class EarningsDatabase:
                     current_price REAL,
                     eps_estimate REAL,
                     revenue_estimate REAL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TEXT,
+                    updated_at TEXT,
                     UNIQUE(symbol, earnings_date)
                 )
             ''')
@@ -90,7 +91,7 @@ class EarningsDatabase:
                     iv_crush_percent REAL,
                     estimated_option_value_loss REAL,
                     earnings_date TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TEXT,
                     UNIQUE(symbol, expiration_date)
                 )
             ''')
@@ -122,6 +123,7 @@ class EarningsDatabase:
             cursor = conn.cursor()
             
             inserted_count = 0
+            now_est = datetime.now(pytz.timezone('US/Eastern')).strftime('%Y-%m-%d %H:%M:%S')
             
             for earning in earnings_list:
                 try:
@@ -161,23 +163,35 @@ class EarningsDatabase:
                     # if earning.get('earnings_date') == 'N/A':
                     #     continue
                     
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO earnings 
-                        (symbol, company_name, earnings_date, earnings_time, sector, industry, 
-                         market_cap, current_price, eps_estimate, revenue_estimate, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ''', (
-                        earning.get('symbol'),
-                        earning.get('company_name'),
-                        earning.get('earnings_date'),
-                        earning.get('earnings_time'),
-                        earning.get('sector'),
-                        earning.get('industry'),
-                        market_cap,
-                        current_price,
-                        eps_estimate,
-                        revenue_estimate
-                    ))
+                    # Check if record exists
+                    cursor.execute("SELECT id FROM earnings WHERE symbol = ? AND earnings_date = ?", 
+                                   (earning.get('symbol'), earning.get('earnings_date')))
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        # Update existing record
+                        cursor.execute('''
+                            UPDATE earnings 
+                            SET company_name=?, earnings_time=?, sector=?, industry=?, 
+                                market_cap=?, current_price=?, eps_estimate=?, revenue_estimate=?, updated_at=?
+                            WHERE id=?
+                        ''', (
+                            earning.get('company_name'), earning.get('earnings_time'), earning.get('sector'),
+                            earning.get('industry'), market_cap, current_price, eps_estimate,
+                            revenue_estimate, now_est, result[0]
+                        ))
+                    else:
+                        # Insert new record
+                        cursor.execute('''
+                            INSERT INTO earnings 
+                            (symbol, company_name, earnings_date, earnings_time, sector, industry, 
+                             market_cap, current_price, eps_estimate, revenue_estimate, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            earning.get('symbol'), earning.get('company_name'), earning.get('earnings_date'),
+                            earning.get('earnings_time'), earning.get('sector'), earning.get('industry'),
+                            market_cap, current_price, eps_estimate, revenue_estimate, now_est, now_est
+                        ))
                     
                     inserted_count += 1
                     
@@ -354,18 +368,22 @@ class EarningsDatabase:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             inserted_count = 0
+            now_est = datetime.now(pytz.timezone('US/Eastern')).strftime('%Y-%m-%d %H:%M:%S')
             
             for data in options_data_list:
                 try:
+                    # First delete any existing records for this symbol to ensure fresh data
+                    cursor.execute('DELETE FROM options_data WHERE symbol = ?', (data['symbol'],))
+                    
                     cursor.execute('''
-                        INSERT OR REPLACE INTO options_data 
+                        INSERT INTO options_data 
                         (symbol, current_price, expiration_date, days_to_expiration,
                          implied_volatility, call_iv, put_iv, historical_volatility,
                          iv_rank, expected_move_percent, expected_move_dollar,
                          expected_move_up, expected_move_down, straddle_price,
                          atm_strike, iv_crush_percent, estimated_option_value_loss,
-                         earnings_date)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         earnings_date, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         data['symbol'], data.get('current_price'), data.get('expiration_date'),
                         data.get('days_to_expiration'), data.get('implied_volatility'),
@@ -374,7 +392,8 @@ class EarningsDatabase:
                         data.get('expected_move_dollar'), data.get('expected_move_up'),
                         data.get('expected_move_down'), data.get('straddle_price'),
                         data.get('atm_strike'), data.get('iv_crush_percent'),
-                        data.get('estimated_option_value_loss'), data.get('earnings_date')
+                        data.get('estimated_option_value_loss'), data.get('earnings_date'),
+                        now_est
                     ))
                     inserted_count += 1
                 except Exception as e:

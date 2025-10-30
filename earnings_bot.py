@@ -386,6 +386,12 @@ class EarningsBot:
                 nearest_exp = exp_dates[0]
             else:
                 earnings_dt = datetime.strptime(earnings_date, '%Y-%m-%d')
+                
+                # Check if earnings date is in the past
+                today = datetime.now().date()
+                if earnings_dt.date() <= today:
+                    print(f"Warning: {symbol} has past earnings date ({earnings_date}). IV analysis not relevant for completed earnings.")
+                    # Still continue processing but with warning
                 nearest_exp = None
                 for exp_date in exp_dates:
                     exp_dt = datetime.strptime(exp_date, '%Y-%m-%d')
