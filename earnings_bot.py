@@ -132,58 +132,102 @@ class EarningsBot:
                 
             company_name = info.get('longName', info.get('shortName', symbol))
             
-            # Try to get earnings calendar
+            # Try to get earnings calendar and timing
             earnings_calendar = None
             earnings_date = 'N/A'
             eps_estimate = 'N/A'
             revenue_estimate = 'N/A'
+            earnings_time = 'N/A'  # Before Market Open (BMO) or After Market Close (AMC)
             
+            # First try to get timing from earnings_dates (most reliable)
+            try:
+                earnings_dates_df = ticker.earnings_dates
+                if earnings_dates_df is not None and not earnings_dates_df.empty:
+                    # Get the most recent future earnings date
+                    now = pd.Timestamp.now(tz='America/New_York')  # Match the timezone of earnings data
+                    future_earnings = earnings_dates_df[earnings_dates_df.index >= now]
+                    if not future_earnings.empty:
+                        next_earnings_timestamp = future_earnings.index[0]
+                        earnings_date = next_earnings_timestamp.strftime('%Y-%m-%d')
+                        
+                        # Extract timing from timestamp hour
+                        hour = next_earnings_timestamp.hour
+                        if hour < 9:  # Before 9 AM EST
+                            earnings_time = 'BMO'  # Before Market Open
+                        elif hour >= 16:  # 4 PM EST or later
+                            earnings_time = 'AMC'  # After Market Close
+                        else:
+                            earnings_time = 'Market Hours'
+                        
+                        # Get EPS estimate
+                        if 'EPS Estimate' in future_earnings.columns:
+                            eps_est = future_earnings.iloc[0]['EPS Estimate']
+                            if pd.notna(eps_est):
+                                eps_estimate = float(eps_est)
+                    
+                    # If no future earnings, try the most recent past earnings for timing pattern
+                    elif not earnings_dates_df.empty:
+                        recent_earnings = earnings_dates_df.iloc[0]  # Most recent
+                        recent_timestamp = earnings_dates_df.index[0]
+                        hour = recent_timestamp.hour
+                        if hour < 9:
+                            earnings_time = 'BMO'
+                        elif hour >= 16:
+                            earnings_time = 'AMC'
+                        else:
+                            earnings_time = 'Market Hours'
+            except Exception as e:
+                print(f"Could not get earnings_dates for {symbol}: {e}")
+            
+            # Fallback to calendar method
             try:
                 earnings_calendar = ticker.calendar
                 
-                # Handle different calendar formats
+                # Handle different calendar formats - only as fallback
                 if earnings_calendar is not None:
                     # Check if it's a dictionary (new format)
                     if isinstance(earnings_calendar, dict):
                         earnings_dates = earnings_calendar.get('Earnings Date', [])
-                        if earnings_dates and len(earnings_dates) > 0:
-                            # Get the first/next earnings date
+                        if earnings_dates and len(earnings_dates) > 0 and earnings_date == 'N/A':
+                            # Get the first/next earnings date only if we don't have one
                             next_date = earnings_dates[0]
                             if hasattr(next_date, 'strftime'):
                                 earnings_date = next_date.strftime('%Y-%m-%d')
                             else:
                                 earnings_date = str(next_date)
-                            
-                            # Try to get EPS and Revenue estimates
+                        
+                        # Always try to get EPS and Revenue estimates from calendar
+                        if eps_estimate == 'N/A':
                             eps_estimate = earnings_calendar.get('Earnings Average', 'N/A')
-                            revenue_estimate = earnings_calendar.get('Revenue Average', 'N/A')
+                        revenue_estimate = earnings_calendar.get('Revenue Average', 'N/A')
                     
-                    # Check if it's a DataFrame (old format)
+                    # Check if it's a DataFrame (old format) - only as fallback
                     elif hasattr(earnings_calendar, 'empty') and not earnings_calendar.empty:
                         next_earnings_date = earnings_calendar.index[0] if len(earnings_calendar.index) > 0 else None
-                        if next_earnings_date:
+                        if next_earnings_date and earnings_date == 'N/A':
                             earnings_date = next_earnings_date.strftime('%Y-%m-%d')
-                            
-                            # Try to get EPS and Revenue estimates from DataFrame
-                            try:
-                                if len(earnings_calendar.columns) > 0 and len(earnings_calendar) > 0:
-                                    # EPS estimate (usually first column)
+                        
+                        # Try to get EPS and Revenue estimates from DataFrame
+                        try:
+                            if len(earnings_calendar.columns) > 0 and len(earnings_calendar) > 0:
+                                # EPS estimate (usually first column)
+                                if eps_estimate == 'N/A':
                                     eps_est = earnings_calendar.iloc[0, 0]
                                     if pd.notna(eps_est):
                                         eps_estimate = float(eps_est)
-                                    
-                                    # Revenue estimate (usually second column if available)
-                                    if len(earnings_calendar.columns) > 1:
-                                        rev_est = earnings_calendar.iloc[0, 1]
-                                        if pd.notna(rev_est):
-                                            revenue_estimate = float(rev_est)
-                            except:
-                                pass
+                                
+                                # Revenue estimate (usually second column if available)
+                                if len(earnings_calendar.columns) > 1:
+                                    rev_est = earnings_calendar.iloc[0, 1]
+                                    if pd.notna(rev_est):
+                                        revenue_estimate = float(rev_est)
+                        except:
+                            pass
                 
             except Exception as cal_error:
                 print(f"No earnings calendar available for {symbol}: {cal_error}")
             
-            # Try to get additional analyst estimates from info
+            # Try to get additional estimates and timing from info
             try:
                 # Get revenue estimate from analyst estimates if available
                 if revenue_estimate == 'N/A':
@@ -201,6 +245,7 @@ class EarningsBot:
                 'symbol': symbol,
                 'company_name': company_name,
                 'earnings_date': earnings_date,
+                'earnings_time': earnings_time,
                 'sector': info.get('sector', 'N/A'),
                 'industry': info.get('industry', 'N/A'),
                 'market_cap': info.get('marketCap', 'N/A'),

@@ -212,9 +212,14 @@ def weekly_earnings_calendar():
                             else:
                                 revenue_display = f"${revenue/1e3:.1f}K"
                         
+                        # Get earnings timing info
+                        timing_display = company.get('earnings_time', 'N/A')
+                        timing_icon = "🌅" if timing_display == "BMO" else "🌙" if timing_display == "AMC" else "❓"
+                        
                         st.markdown(f"""
                         **{company['symbol']}**  
                         {company['company_name']}  
+                        {timing_icon} {timing_display}  
                         💰 EPS Est: {eps_display}  
                         📊 Rev Est: {revenue_display}  
                         🏢 {company['sector'] if pd.notna(company['sector']) else 'N/A'}
@@ -287,12 +292,19 @@ def all_tickers_data():
                 combined_data['revenue_estimate'] = 0
             else:
                 combined_data['revenue_estimate'] = combined_data['revenue_estimate'].fillna(0)
+            
+            # Handle earnings_time column (might not exist in older data)
+            if 'earnings_time' not in combined_data.columns:
+                combined_data['earnings_time'] = 'N/A'
+            else:
+                combined_data['earnings_time'] = combined_data['earnings_time'].fillna('N/A')
         else:
             # If no data in database, create empty dataframe with just symbols
             combined_data = pd.DataFrame({
                 'symbol': all_symbols,
                 'company_name': 'N/A',
                 'earnings_date': 'N/A',
+                'earnings_time': 'N/A',
                 'sector': 'N/A',
                 'current_price': 0,
                 'market_cap': 0,
@@ -372,7 +384,7 @@ def all_tickers_data():
         
         # Select columns to display
         columns_to_show = [
-            'symbol', 'company_name', 'earnings_date', 'sector', 
+            'symbol', 'company_name', 'earnings_date', 'earnings_time', 'sector', 
             'current_price', 'market_cap', 'eps_estimate', 'revenue_estimate'
         ]
         
@@ -384,6 +396,7 @@ def all_tickers_data():
                 "symbol": st.column_config.TextColumn("Symbol", width="small"),
                 "company_name": st.column_config.TextColumn("Company Name", width="large"),
                 "earnings_date": st.column_config.TextColumn("Earnings Date", width="medium"),
+                "earnings_time": st.column_config.TextColumn("Timing", width="small"),
                 "sector": st.column_config.TextColumn("Sector", width="medium"),
                 "current_price": st.column_config.TextColumn("Current Price", width="small"),
                 "market_cap": st.column_config.TextColumn("Market Cap", width="small"),
@@ -592,8 +605,12 @@ def analytics():
         ]
         
         if not filtered.empty:
+            # Ensure earnings_time column exists for display
+            if 'earnings_time' not in filtered.columns:
+                filtered['earnings_time'] = 'N/A'
+            
             st.dataframe(
-                filtered[['symbol', 'company_name', 'earnings_date', 'sector', 'market_cap']],
+                filtered[['symbol', 'company_name', 'earnings_date', 'earnings_time', 'sector', 'market_cap']],
                 use_container_width=True
             )
         else:

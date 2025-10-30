@@ -28,6 +28,7 @@ class EarningsDatabase:
                     symbol TEXT NOT NULL,
                     company_name TEXT,
                     earnings_date TEXT,
+                    earnings_time TEXT,
                     sector TEXT,
                     industry TEXT,
                     market_cap INTEGER,
@@ -47,6 +48,14 @@ class EarningsDatabase:
                 # Column doesn't exist, add it
                 cursor.execute("ALTER TABLE earnings ADD COLUMN revenue_estimate REAL")
                 print("Added revenue_estimate column to existing database")
+            
+            # Check if earnings_time column exists, if not add it (for existing databases)
+            try:
+                cursor.execute("SELECT earnings_time FROM earnings LIMIT 1")
+            except sqlite3.OperationalError:
+                # Column doesn't exist, add it
+                cursor.execute("ALTER TABLE earnings ADD COLUMN earnings_time TEXT")
+                print("Added earnings_time column to existing database")
             
             # Create index for faster queries
             cursor.execute('''
@@ -116,13 +125,14 @@ class EarningsDatabase:
                     
                     cursor.execute('''
                         INSERT OR REPLACE INTO earnings 
-                        (symbol, company_name, earnings_date, sector, industry, 
+                        (symbol, company_name, earnings_date, earnings_time, sector, industry, 
                          market_cap, current_price, eps_estimate, revenue_estimate, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     ''', (
                         earning.get('symbol'),
                         earning.get('company_name'),
                         earning.get('earnings_date'),
+                        earning.get('earnings_time'),
                         earning.get('sector'),
                         earning.get('industry'),
                         market_cap,
@@ -153,7 +163,7 @@ class EarningsDatabase:
         """
         with sqlite3.connect(self.db_path) as conn:
             query = '''
-                SELECT symbol, company_name, earnings_date, sector, industry,
+                SELECT symbol, company_name, earnings_date, earnings_time, sector, industry,
                        market_cap, current_price, eps_estimate, revenue_estimate, updated_at
                 FROM earnings 
                 WHERE earnings_date BETWEEN ? AND ?
@@ -178,7 +188,7 @@ class EarningsDatabase:
         """Get all earnings data"""
         with sqlite3.connect(self.db_path) as conn:
             query = '''
-                SELECT symbol, company_name, earnings_date, sector, industry,
+                SELECT symbol, company_name, earnings_date, earnings_time, sector, industry,
                        market_cap, current_price, eps_estimate, revenue_estimate, updated_at
                 FROM earnings 
                 ORDER BY CASE WHEN earnings_date = 'N/A' THEN 1 ELSE 0 END, earnings_date DESC, symbol
@@ -197,7 +207,7 @@ class EarningsDatabase:
         """
         with sqlite3.connect(self.db_path) as conn:
             query = '''
-                SELECT symbol, company_name, earnings_date, sector, industry,
+                SELECT symbol, company_name, earnings_date, earnings_time, sector, industry,
                        market_cap, current_price, eps_estimate, revenue_estimate, updated_at
                 FROM earnings 
                 WHERE symbol = ?
