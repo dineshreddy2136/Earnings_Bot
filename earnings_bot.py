@@ -136,6 +136,7 @@ class EarningsBot:
             earnings_calendar = None
             earnings_date = 'N/A'
             eps_estimate = 'N/A'
+            revenue_estimate = 'N/A'
             
             try:
                 earnings_calendar = ticker.calendar
@@ -153,8 +154,9 @@ class EarningsBot:
                             else:
                                 earnings_date = str(next_date)
                             
-                            # Try to get EPS estimates
+                            # Try to get EPS and Revenue estimates
                             eps_estimate = earnings_calendar.get('Earnings Average', 'N/A')
+                            revenue_estimate = earnings_calendar.get('Revenue Average', 'N/A')
                     
                     # Check if it's a DataFrame (old format)
                     elif hasattr(earnings_calendar, 'empty') and not earnings_calendar.empty:
@@ -162,17 +164,37 @@ class EarningsBot:
                         if next_earnings_date:
                             earnings_date = next_earnings_date.strftime('%Y-%m-%d')
                             
-                            # Try to get EPS estimate from DataFrame
+                            # Try to get EPS and Revenue estimates from DataFrame
                             try:
                                 if len(earnings_calendar.columns) > 0 and len(earnings_calendar) > 0:
+                                    # EPS estimate (usually first column)
                                     eps_est = earnings_calendar.iloc[0, 0]
                                     if pd.notna(eps_est):
                                         eps_estimate = float(eps_est)
+                                    
+                                    # Revenue estimate (usually second column if available)
+                                    if len(earnings_calendar.columns) > 1:
+                                        rev_est = earnings_calendar.iloc[0, 1]
+                                        if pd.notna(rev_est):
+                                            revenue_estimate = float(rev_est)
                             except:
                                 pass
                 
             except Exception as cal_error:
                 print(f"No earnings calendar available for {symbol}: {cal_error}")
+            
+            # Try to get additional analyst estimates from info
+            try:
+                # Get revenue estimate from analyst estimates if available
+                if revenue_estimate == 'N/A':
+                    analysts = info.get('financialData', {})
+                    revenue_growth = analysts.get('revenueGrowth')
+                    current_revenue = info.get('totalRevenue')
+                    if revenue_growth and current_revenue:
+                        estimated_revenue = current_revenue * (1 + revenue_growth)
+                        revenue_estimate = estimated_revenue
+            except:
+                pass
             
             # Create earnings info regardless of whether we have earnings date
             earnings_info = {
@@ -183,7 +205,8 @@ class EarningsBot:
                 'industry': info.get('industry', 'N/A'),
                 'market_cap': info.get('marketCap', 'N/A'),
                 'current_price': info.get('currentPrice', info.get('regularMarketPrice', 'N/A')),
-                'eps_estimate': eps_estimate
+                'eps_estimate': eps_estimate,
+                'revenue_estimate': revenue_estimate
             }
             
             return earnings_info

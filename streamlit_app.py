@@ -58,7 +58,7 @@ def get_weekly_earnings_data(week_start, week_end):
 
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def get_all_earnings_data():
-    """Get all earnings data from database"""
+    """Get all earnings data from database with revenue estimates"""
     return db.get_all_earnings()
 
 @st.cache_data(ttl=300)  # Cache for 5 minutes
@@ -198,10 +198,25 @@ def weekly_earnings_calendar():
                 cols = st.columns(min(len(companies), 4))
                 for i, company in enumerate(companies):
                     with cols[i % 4]:
+                        eps_display = f"{company['eps_estimate']:.2f}" if pd.notna(company['eps_estimate']) and company['eps_estimate'] != 'N/A' else 'N/A'
+                        
+                        # Format revenue estimate (convert to millions/billions)
+                        revenue_display = 'N/A'
+                        revenue_estimate = company.get('revenue_estimate', 'N/A')
+                        if pd.notna(revenue_estimate) and revenue_estimate != 'N/A' and revenue_estimate != 0:
+                            revenue = revenue_estimate
+                            if revenue >= 1e9:
+                                revenue_display = f"${revenue/1e9:.1f}B"
+                            elif revenue >= 1e6:
+                                revenue_display = f"${revenue/1e6:.1f}M"
+                            else:
+                                revenue_display = f"${revenue/1e3:.1f}K"
+                        
                         st.markdown(f"""
                         **{company['symbol']}**  
                         {company['company_name']}  
-                        💰 EPS Est: {company['eps_estimate'] if pd.notna(company['eps_estimate']) else 'N/A'}  
+                        💰 EPS Est: {eps_display}  
+                        📊 Rev Est: {revenue_display}  
                         🏢 {company['sector'] if pd.notna(company['sector']) else 'N/A'}
                         """)
             else:
@@ -266,6 +281,12 @@ def all_tickers_data():
             combined_data['current_price'] = combined_data['current_price'].fillna(0)
             combined_data['market_cap'] = combined_data['market_cap'].fillna(0)
             combined_data['eps_estimate'] = combined_data['eps_estimate'].fillna(0)
+            
+            # Handle revenue_estimate column (might not exist in older data)
+            if 'revenue_estimate' not in combined_data.columns:
+                combined_data['revenue_estimate'] = 0
+            else:
+                combined_data['revenue_estimate'] = combined_data['revenue_estimate'].fillna(0)
         else:
             # If no data in database, create empty dataframe with just symbols
             combined_data = pd.DataFrame({
@@ -275,7 +296,8 @@ def all_tickers_data():
                 'sector': 'N/A',
                 'current_price': 0,
                 'market_cap': 0,
-                'eps_estimate': 0
+                'eps_estimate': 0,
+                'revenue_estimate': 0
             })
         
         # Add controls
@@ -331,10 +353,27 @@ def all_tickers_data():
             lambda x: f"{x:.2f}" if pd.notna(x) and x != 0 else "N/A"
         )
         
+        # Format revenue estimate
+        def format_revenue_estimate(value):
+            if pd.isna(value) or value == 0 or value == 'N/A':
+                return "N/A"
+            if value >= 1e9:
+                return f"${value/1e9:.1f}B"
+            elif value >= 1e6:
+                return f"${value/1e6:.1f}M"
+            else:
+                return f"${value/1e3:.1f}K"
+        
+        # Add revenue_estimate column if it doesn't exist
+        if 'revenue_estimate' not in display_df.columns:
+            display_df['revenue_estimate'] = 0
+        
+        display_df['revenue_estimate'] = display_df['revenue_estimate'].apply(format_revenue_estimate)
+        
         # Select columns to display
         columns_to_show = [
             'symbol', 'company_name', 'earnings_date', 'sector', 
-            'current_price', 'market_cap', 'eps_estimate'
+            'current_price', 'market_cap', 'eps_estimate', 'revenue_estimate'
         ]
         
         # Display the data
@@ -348,7 +387,8 @@ def all_tickers_data():
                 "sector": st.column_config.TextColumn("Sector", width="medium"),
                 "current_price": st.column_config.TextColumn("Current Price", width="small"),
                 "market_cap": st.column_config.TextColumn("Market Cap", width="small"),
-                "eps_estimate": st.column_config.TextColumn("EPS Estimate", width="small")
+                "eps_estimate": st.column_config.TextColumn("EPS Est.", width="small"),
+                "revenue_estimate": st.column_config.TextColumn("Revenue Est.", width="small")
             }
         )
         

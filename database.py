@@ -33,11 +33,20 @@ class EarningsDatabase:
                     market_cap INTEGER,
                     current_price REAL,
                     eps_estimate REAL,
+                    revenue_estimate REAL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(symbol, earnings_date)
                 )
             ''')
+            
+            # Check if revenue_estimate column exists, if not add it (for existing databases)
+            try:
+                cursor.execute("SELECT revenue_estimate FROM earnings LIMIT 1")
+            except sqlite3.OperationalError:
+                # Column doesn't exist, add it
+                cursor.execute("ALTER TABLE earnings ADD COLUMN revenue_estimate REAL")
+                print("Added revenue_estimate column to existing database")
             
             # Create index for faster queries
             cursor.execute('''
@@ -93,6 +102,14 @@ class EarningsDatabase:
                         except (ValueError, TypeError):
                             eps_estimate = None
                     
+                    # Convert revenue_estimate to float if it's not 'N/A'
+                    revenue_estimate = None
+                    if earning.get('revenue_estimate') != 'N/A' and earning.get('revenue_estimate') is not None:
+                        try:
+                            revenue_estimate = float(earning['revenue_estimate'])
+                        except (ValueError, TypeError):
+                            revenue_estimate = None
+                    
                     # Allow entries with 'N/A' earnings dates for company info storage
                     # if earning.get('earnings_date') == 'N/A':
                     #     continue
@@ -100,8 +117,8 @@ class EarningsDatabase:
                     cursor.execute('''
                         INSERT OR REPLACE INTO earnings 
                         (symbol, company_name, earnings_date, sector, industry, 
-                         market_cap, current_price, eps_estimate, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                         market_cap, current_price, eps_estimate, revenue_estimate, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     ''', (
                         earning.get('symbol'),
                         earning.get('company_name'),
@@ -110,7 +127,8 @@ class EarningsDatabase:
                         earning.get('industry'),
                         market_cap,
                         current_price,
-                        eps_estimate
+                        eps_estimate,
+                        revenue_estimate
                     ))
                     
                     inserted_count += 1
@@ -136,7 +154,7 @@ class EarningsDatabase:
         with sqlite3.connect(self.db_path) as conn:
             query = '''
                 SELECT symbol, company_name, earnings_date, sector, industry,
-                       market_cap, current_price, eps_estimate, updated_at
+                       market_cap, current_price, eps_estimate, revenue_estimate, updated_at
                 FROM earnings 
                 WHERE earnings_date BETWEEN ? AND ?
                 ORDER BY earnings_date, symbol
@@ -161,7 +179,7 @@ class EarningsDatabase:
         with sqlite3.connect(self.db_path) as conn:
             query = '''
                 SELECT symbol, company_name, earnings_date, sector, industry,
-                       market_cap, current_price, eps_estimate, updated_at
+                       market_cap, current_price, eps_estimate, revenue_estimate, updated_at
                 FROM earnings 
                 ORDER BY CASE WHEN earnings_date = 'N/A' THEN 1 ELSE 0 END, earnings_date DESC, symbol
             '''
@@ -180,7 +198,7 @@ class EarningsDatabase:
         with sqlite3.connect(self.db_path) as conn:
             query = '''
                 SELECT symbol, company_name, earnings_date, sector, industry,
-                       market_cap, current_price, eps_estimate, updated_at
+                       market_cap, current_price, eps_estimate, revenue_estimate, updated_at
                 FROM earnings 
                 WHERE symbol = ?
                 ORDER BY earnings_date DESC
