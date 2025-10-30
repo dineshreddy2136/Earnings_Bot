@@ -101,7 +101,7 @@ def main():
     st.sidebar.title("📊 Navigation")
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["📅 Weekly Earnings Calendar", "📊 All Tickers Data", "🔄 Sync Data", "📈 Analytics"]
+        ["📅 Weekly Earnings Calendar", "📊 All Tickers Data", "🔄 Sync Data", "📈 Analytics", "📊 Options IV Analysis"]
     )
     
     # Week navigation in sidebar (for calendar page)
@@ -149,6 +149,9 @@ def main():
         sync_data()
     elif page == "📈 Analytics":
         analytics()
+    
+    elif page == "📊 Options IV Analysis":
+        options_iv_analysis()
 
 def weekly_earnings_calendar():
     """Weekly earnings calendar page"""
@@ -615,6 +618,342 @@ def analytics():
             )
         else:
             st.info("No companies found matching your search.")
+
+def options_iv_analysis():
+    """Options IV Analysis page"""
+    st.markdown("# 📊 Options IV Analysis")
+    st.markdown("**Implied volatility and expected move analysis for earnings plays**")
+    st.markdown("💡 *Focus on stocks with earnings this week for the most relevant trading opportunities*")
+    
+    # Add sync options data section
+    with st.expander("🔧 Sync Options Data", expanded=False):
+        st.markdown("*Fetch IV data for stocks with upcoming earnings*")
+        sync_options_data()
+    
+    # Get options data from database
+    database = init_database()
+    options_df = database.get_all_options_data()
+    
+    if options_df.empty:
+        st.warning("No options data available. Please sync data first using the button above.")
+        return
+    
+    # Metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Symbols", len(options_df))
+    with col2:
+        avg_iv = options_df['implied_volatility'].mean()
+        st.metric("Average IV", f"{avg_iv:.1f}%", help="Average implied volatility across all options")
+    with col3:
+        avg_expected_move = options_df['expected_move_percent'].mean()
+        st.metric("Avg Expected Move", f"{avg_expected_move:.1f}%", help="Average expected stock move based on straddle pricing")
+    with col4:
+        high_iv_count = len(options_df[options_df['implied_volatility'] > 50])
+        st.metric("High IV (>50%)", high_iv_count, help="Number of stocks with IV above 50%")
+    
+    # Filters
+    st.markdown("## 🎛️ Filters")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        min_iv = st.slider("Minimum IV%", 0.0, 100.0, 0.0, 5.0, help="Filter by minimum implied volatility")
+        max_days = st.slider("Max Days to Expiration", 1, 60, 30, help="Maximum days until options expire")
+    with col2:
+        sectors = ['All'] + sorted(list(options_df['sector'].dropna().unique()))
+        selected_sector = st.selectbox("Filter by Sector", sectors)
+        min_expected_move = st.slider("Min Expected Move%", 0.0, 20.0, 0.0, 0.5, help="Minimum expected percentage move")
+    with col3:
+        min_price = st.slider("Min Stock Price", 0.0, 500.0, 0.0, 10.0, help="Minimum stock price filter")
+        
+    # Time range selection
+    st.markdown("### 📅 Time Range Filter")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        time_filter = st.selectbox(
+            "Show stocks with earnings:",
+            ["This Week (Current)", "Next Week", "This Month", "Next 30 Days", "All Upcoming", "Custom Date Range"],
+            help="Select which time period to focus on for earnings"
+        )
+    
+    with col2:
+        if time_filter == "Custom Date Range":
+            custom_start = st.date_input("Start Date", datetime.now().date())
+            custom_end = st.date_input("End Date", datetime.now().date() + timedelta(days=7))
+    
+    # Calculate date range based on selection
+    from datetime import datetime, timedelta 
+    today = datetime.now().date()
+    
+    if time_filter == "This Week (Current)":
+        start_of_week = today - timedelta(days=today.weekday())  # Monday
+        end_of_week = start_of_week + timedelta(days=6)  # Sunday
+        filter_start, filter_end = start_of_week, end_of_week
+        
+    elif time_filter == "Next Week":
+        start_of_next_week = today - timedelta(days=today.weekday()) + timedelta(days=7)
+        end_of_next_week = start_of_next_week + timedelta(days=6)
+        filter_start, filter_end = start_of_next_week, end_of_next_week
+        
+    elif time_filter == "This Month":
+        start_of_month = today.replace(day=1)
+        if today.month == 12:
+            end_of_month = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            end_of_month = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
+        filter_start, filter_end = start_of_month, end_of_month
+        
+    elif time_filter == "Next 30 Days":
+        filter_start, filter_end = today, today + timedelta(days=30)
+        
+    elif time_filter == "Custom Date Range":
+        filter_start, filter_end = custom_start, custom_end
+        
+    else:  # "All Upcoming"
+        filter_start, filter_end = today, today + timedelta(days=365)
+    
+    # Show selected date range
+    if time_filter != "All Upcoming":
+        st.info(f"📅 Showing stocks with earnings: {filter_start.strftime('%B %d')} - {filter_end.strftime('%B %d, %Y')}")
+    else:
+        st.info(f"📅 Showing all upcoming earnings (next 365 days)")
+    
+    # Apply filters
+    filtered_df = options_df[
+        (options_df['implied_volatility'] >= min_iv) & 
+        (options_df['days_to_expiration'] <= max_days) &
+        (options_df['expected_move_percent'] >= min_expected_move) &
+        (options_df['current_price'] >= min_price)
+    ]
+    
+    if selected_sector != 'All':
+        filtered_df = filtered_df[filtered_df['sector'] == selected_sector]
+    
+    # Apply time range filter
+    if time_filter != "All Upcoming":
+        filter_start_str = filter_start.strftime('%Y-%m-%d')
+        filter_end_str = filter_end.strftime('%Y-%m-%d')
+        
+        filtered_df = filtered_df[
+            (filtered_df['earnings_date'] != 'N/A') &
+            (filtered_df['earnings_date'] >= filter_start_str) &
+            (filtered_df['earnings_date'] <= filter_end_str)
+        ]
+    else:
+        # For "All Upcoming", just filter out N/A dates and past dates
+        today_str = today.strftime('%Y-%m-%d')
+        filtered_df = filtered_df[
+            (filtered_df['earnings_date'] != 'N/A') &
+            (filtered_df['earnings_date'] >= today_str)
+        ]
+    
+    # Summary after filters
+    st.markdown(f"## 📋 Options Data ({len(filtered_df)} symbols shown)")
+    
+    if filtered_df.empty:
+        st.warning("No data matches your filters. Try adjusting the filter criteria.")
+        return
+    
+    # Display options data table
+    display_columns = [
+        'symbol', 'company_name', 'current_price', 'earnings_date', 'days_to_expiration',
+        'implied_volatility', 'expected_move_percent', 'expected_move_dollar',
+        'expected_move_up', 'expected_move_down', 'sector'
+    ]
+    
+    # Ensure all columns exist
+    for col in display_columns:
+        if col not in filtered_df.columns:
+            filtered_df[col] = 'N/A'
+    
+    st.dataframe(
+        filtered_df[display_columns].sort_values('expected_move_percent', ascending=False),
+        use_container_width=True,
+        column_config={
+            "symbol": st.column_config.TextColumn("Symbol", width="small"),
+            "company_name": st.column_config.TextColumn("Company", width="medium"),
+            "current_price": st.column_config.NumberColumn("Price", format="$%.2f", width="small"),
+            "earnings_date": st.column_config.TextColumn("Earnings Date", width="medium"),
+            "days_to_expiration": st.column_config.NumberColumn("Days to Exp", width="small"),
+            "implied_volatility": st.column_config.NumberColumn("IV%", format="%.1f%%", width="small"),
+            "expected_move_percent": st.column_config.NumberColumn("Expected Move%", format="%.1f%%", width="small"),
+            "expected_move_dollar": st.column_config.NumberColumn("Expected Move $", format="$%.2f", width="small"),
+            "expected_move_up": st.column_config.NumberColumn("Expected Up", format="$%.2f", width="small"),
+            "expected_move_down": st.column_config.NumberColumn("Expected Down", format="$%.2f", width="small"),
+            "sector": st.column_config.TextColumn("Sector", width="medium")
+        }
+    )
+    
+    # Charts
+    st.markdown("## 📈 IV Analysis Charts")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        # IV vs Expected Move scatter plot
+        import plotly.express as px
+        fig_scatter = px.scatter(
+            filtered_df,
+            x='implied_volatility',
+            y='expected_move_percent',
+            color='sector',
+            size='current_price',
+            hover_data=['symbol', 'company_name', 'earnings_date'],
+            title='IV vs Expected Move',
+            labels={
+                'implied_volatility': 'Implied Volatility (%)',
+                'expected_move_percent': 'Expected Move (%)'
+            }
+        )
+        fig_scatter.update_layout(height=400)
+        st.plotly_chart(fig_scatter, use_container_width=True)
+    
+    with col2:
+        # IV Distribution histogram
+        fig_hist = px.histogram(
+            filtered_df,
+            x='implied_volatility',
+            nbins=20,
+            title='IV Distribution',
+            labels={'implied_volatility': 'Implied Volatility (%)', 'count': 'Number of Stocks'}
+        )
+        fig_hist.update_layout(height=400)
+        st.plotly_chart(fig_hist, use_container_width=True)
+    
+    # Additional analysis
+    col1, col2 = st.columns(2)
+    with col1:
+        # Expected Move vs Current Price
+        fig_move_price = px.scatter(
+            filtered_df,
+            x='current_price',
+            y='expected_move_dollar',
+            color='implied_volatility',
+            hover_data=['symbol', 'company_name'],
+            title='Expected Move $ vs Stock Price',
+            labels={
+                'current_price': 'Stock Price ($)',
+                'expected_move_dollar': 'Expected Move ($)',
+                'implied_volatility': 'IV (%)'
+            }
+        )
+        fig_move_price.update_layout(height=400)
+        st.plotly_chart(fig_move_price, use_container_width=True)
+    
+    with col2:
+        # Expected Move Range Analysis
+        fig_range = px.bar(
+            filtered_df.nlargest(10, 'expected_move_percent'),
+            x='symbol',
+            y='expected_move_percent',
+            title='Top 10 Biggest Expected Moves',
+            labels={'expected_move_percent': 'Expected Move (%)'},
+            hover_data=['expected_move_up', 'expected_move_down', 'company_name', 'earnings_date']
+        )
+        fig_range.update_layout(height=400)
+        st.plotly_chart(fig_range, use_container_width=True)
+
+def sync_options_data():
+    """Sync options IV data for stocks with upcoming earnings"""
+    from earnings_bot import EarningsBot
+    from datetime import datetime, timedelta
+    
+    # Let user choose what to sync
+    sync_option = st.radio(
+        "What stocks to sync IV data for:",
+        ["This Week Only", "Next 2 Weeks", "All Upcoming Earnings", "Custom Selection"],
+        horizontal=True,
+        key="sync_option_radio"
+    )
+    
+    selected_symbols = []
+    if sync_option == "Custom Selection":
+        all_symbols = EarningsBot().load_tickers_from_json()
+        selected_symbols = st.multiselect(
+            "Select specific symbols:",
+            all_symbols,
+            default=["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA"],
+            key="custom_symbols_select"
+        )
+        if not selected_symbols:
+            st.warning("Please select at least one symbol to sync.")
+            return
+    
+    # Single sync button that triggers immediately
+    if st.button("🚀 Start Sync", type="primary", key="start_sync_btn"):
+        with st.spinner("Fetching options data..."):
+            bot = EarningsBot()
+            database = init_database()
+            
+            # Determine which stocks to sync based on selection
+            if sync_option == "Custom Selection":
+                symbols = selected_symbols
+                st.info(f"Syncing IV data for {len(symbols)} selected symbols")
+                
+            else:
+                # Get date range based on selection
+                today = datetime.now().date()
+                
+                if sync_option == "This Week Only":
+                    start_of_week = today - timedelta(days=today.weekday())
+                    end_of_week = start_of_week + timedelta(days=6)
+                    date_range = (start_of_week, end_of_week)
+                    
+                elif sync_option == "Next 2 Weeks":
+                    start_date = today
+                    end_date = today + timedelta(days=14)
+                    date_range = (start_date, end_date)
+                    
+                else:  # "All Upcoming Earnings"
+                    start_date = today
+                    end_date = today + timedelta(days=60)  # Next 2 months
+                    date_range = (start_date, end_date)
+                
+                st.info(f"Looking for stocks with earnings between {date_range[0]} and {date_range[1]}")
+                
+                # Get stocks with earnings in the selected period
+                earnings_data = database.get_earnings_by_week(
+                    date_range[0].strftime('%Y-%m-%d'), 
+                    date_range[1].strftime('%Y-%m-%d')
+                )
+        
+                if earnings_data.empty:
+                    st.warning(f"No stocks found with earnings in the selected period. Please sync earnings data first.")
+                    return
+                
+                # Get unique symbols with earnings in the period
+                symbols = earnings_data['symbol'].unique().tolist()
+                st.success(f"Found {len(symbols)} stocks with earnings in selected period: {', '.join(symbols[:10])}{'...' if len(symbols) > 10 else ''}")
+        
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            options_data = []
+            for i, symbol in enumerate(symbols):
+                status_text.text(f"Processing {symbol} ({i+1}/{len(symbols)})")
+                
+                # Get IV data
+                iv_data = bot.get_options_iv_data(symbol)
+                if iv_data:
+                    # Get IV crush estimate
+                    crush_data = bot.get_iv_crush_estimate(symbol)
+                    if crush_data:
+                        iv_data.update(crush_data)
+                    options_data.append(iv_data)
+                
+                progress_bar.progress((i + 1) / len(symbols))
+            
+            # Insert into database
+            if options_data:
+                count = database.insert_options_data(options_data)
+                st.success(f"Successfully synced {count} options records!")
+            else:
+                st.warning("No options data was retrieved. This could be due to market hours or data availability.")
+            
+            progress_bar.empty()
+            status_text.empty()
+            
+            # Refresh the page
+            st.rerun()
 
 if __name__ == "__main__":
     main()

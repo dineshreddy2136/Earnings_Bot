@@ -68,6 +68,44 @@ class EarningsDatabase:
                 ON earnings(symbol)
             ''')
             
+            # Create options table for IV data
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS options_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    current_price REAL,
+                    expiration_date TEXT,
+                    days_to_expiration INTEGER,
+                    implied_volatility REAL,
+                    call_iv REAL,
+                    put_iv REAL,
+                    historical_volatility REAL,
+                    iv_rank REAL,
+                    expected_move_percent REAL,
+                    expected_move_dollar REAL,
+                    expected_move_up REAL,
+                    expected_move_down REAL,
+                    straddle_price REAL,
+                    atm_strike REAL,
+                    iv_crush_percent REAL,
+                    estimated_option_value_loss REAL,
+                    earnings_date TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(symbol, expiration_date)
+                )
+            ''')
+            
+            # Create index for options table
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_options_symbol 
+                ON options_data(symbol)
+            ''')
+            
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_options_exp_date 
+                ON options_data(expiration_date)
+            ''')
+            
             conn.commit()
     
     def insert_earnings_data(self, earnings_list: List[Dict]) -> int:
@@ -299,3 +337,81 @@ class EarningsDatabase:
                 size /= 1024.0
             return f"{size:.1f} TB"
         return "0 B"
+    
+    def insert_options_data(self, options_data_list: List[Dict]) -> int:
+        """
+        Insert options IV data into database
+        
+        Args:
+            options_data_list: List of options data dictionaries
+            
+        Returns:
+            int: Number of records inserted
+        """
+        if not options_data_list:
+            return 0
+            
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            inserted_count = 0
+            
+            for data in options_data_list:
+                try:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO options_data 
+                        (symbol, current_price, expiration_date, days_to_expiration,
+                         implied_volatility, call_iv, put_iv, historical_volatility,
+                         iv_rank, expected_move_percent, expected_move_dollar,
+                         expected_move_up, expected_move_down, straddle_price,
+                         atm_strike, iv_crush_percent, estimated_option_value_loss,
+                         earnings_date)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        data['symbol'], data.get('current_price'), data.get('expiration_date'),
+                        data.get('days_to_expiration'), data.get('implied_volatility'),
+                        data.get('call_iv'), data.get('put_iv'), data.get('historical_volatility'),
+                        data.get('iv_rank'), data.get('expected_move_percent'),
+                        data.get('expected_move_dollar'), data.get('expected_move_up'),
+                        data.get('expected_move_down'), data.get('straddle_price'),
+                        data.get('atm_strike'), data.get('iv_crush_percent'),
+                        data.get('estimated_option_value_loss'), data.get('earnings_date')
+                    ))
+                    inserted_count += 1
+                except Exception as e:
+                    print(f"Error inserting options data for {data.get('symbol', 'unknown')}: {e}")
+            
+            conn.commit()
+            return inserted_count
+    
+    def get_all_options_data(self) -> pd.DataFrame:
+        """Get all options data from database"""
+        with sqlite3.connect(self.db_path) as conn:
+            query = '''
+                SELECT o.*, e.company_name, e.sector
+                FROM options_data o
+                LEFT JOIN earnings e ON o.symbol = e.symbol
+                ORDER BY o.expected_move_percent DESC
+            '''
+            return pd.read_sql_query(query, conn)
+    
+    def get_options_by_symbol(self, symbol: str) -> pd.DataFrame:
+        """Get options data for a specific symbol"""
+        with sqlite3.connect(self.db_path) as conn:
+            query = '''
+                SELECT * FROM options_data 
+                WHERE symbol = ?
+                ORDER BY expiration_date
+            '''
+            return pd.read_sql_query(query, conn, params=(symbol,))
+    
+    def get_high_iv_options(self, min_iv: float = 50.0) -> pd.DataFrame:
+        """Get options with high implied volatility"""
+        with sqlite3.connect(self.db_path) as conn:
+            query = '''
+                SELECT o.*, e.company_name, e.sector
+                FROM options_data o
+                LEFT JOIN earnings e ON o.symbol = e.symbol
+                WHERE o.implied_volatility >= ?
+                ORDER BY o.implied_volatility DESC
+            '''
+            return pd.read_sql_query(query, conn, params=(min_iv,))

@@ -10,6 +10,10 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
+import concurrent.futures
+import threading
+import time
+import numpy as np
 from database import EarningsDatabase
 
 
@@ -18,6 +22,7 @@ class EarningsBot:
         """Initialize the Earnings Bot"""
         self.earnings_data = []
         self.db = EarningsDatabase()
+        self.lock = threading.Lock()  # For thread-safe operations
         
     def get_week_range(self, target_date=None):
         """
@@ -261,6 +266,244 @@ class EarningsBot:
             
         return None
     
+    def get_earnings_for_symbol_with_retry(self, symbol, max_retries=3, delay=1):
+        """
+        Get earnings information with retry logic and rate limiting
+        
+        Args:
+            symbol: Stock symbol
+            max_retries: Maximum number of retries
+            delay: Delay between retries in seconds
+            
+        Returns:
+            dict: Earnings information or None
+        """
+        for attempt in range(max_retries):
+            try:
+                # Add small delay to avoid rate limiting
+                if attempt > 0:
+                    time.sleep(delay * attempt)
+                
+                result = self.get_earnings_for_symbol(symbol)
+                return result
+                
+            except Exception as e:
+                print(f"Attempt {attempt + 1} failed for {symbol}: {e}")
+                if attempt == max_retries - 1:
+                    print(f"All attempts failed for {symbol}")
+                    return None
+                time.sleep(delay)
+        
+        return None
+    
+    def fetch_earnings_parallel(self, symbols, max_workers=10, progress_callback=None):
+        """
+        Fetch earnings data for multiple symbols in parallel
+        
+        Args:
+            symbols: List of stock symbols
+            max_workers: Maximum number of concurrent threads
+            progress_callback: Optional callback function for progress updates
+            
+        Returns:
+            list: List of earnings data
+        """
+        earnings_data = []
+        completed_count = 0
+        total_count = len(symbols)
+        
+        print(f"Starting parallel processing of {total_count} symbols with {max_workers} workers...")
+        
+        # Use ThreadPoolExecutor for parallel processing
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_symbol = {
+                executor.submit(self.get_earnings_for_symbol_with_retry, symbol): symbol 
+                for symbol in symbols
+            }
+            
+            # Process completed tasks
+            for future in concurrent.futures.as_completed(future_to_symbol):
+                symbol = future_to_symbol[future]
+                completed_count += 1
+                
+                try:
+                    result = future.result(timeout=30)  # 30 second timeout per request
+                    if result:
+                        with self.lock:  # Thread-safe append
+                            earnings_data.append(result)
+                        
+                        print(f"✅ {symbol} ({completed_count}/{total_count}) - Success")
+                    else:
+                        print(f"❌ {symbol} ({completed_count}/{total_count}) - No data")
+                    
+                    # Call progress callback if provided
+                    if progress_callback:
+                        progress_callback(completed_count, total_count, symbol)
+                        
+                except Exception as e:
+                    print(f"❌ {symbol} ({completed_count}/{total_count}) - Error: {e}")
+        
+        print(f"Parallel processing complete! Got data for {len(earnings_data)} out of {total_count} symbols")
+        return earnings_data
+    
+    def get_next_earnings_date(self, symbol):
+        """Helper method to get next earnings date for a symbol"""
+        try:
+            earnings_info = self.get_earnings_for_symbol(symbol)
+            return earnings_info.get('earnings_date', 'N/A') if earnings_info else 'N/A'
+        except:
+            return 'N/A'
+    
+    def get_options_iv_data(self, symbol):
+        """
+        Get implied volatility and expected move data for earnings plays
+        
+        Args:
+            symbol: Stock symbol
+            
+        Returns:
+            dict: IV data including expected move
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            
+            # Get current stock price
+            info = ticker.info
+            current_price = info.get('currentPrice', info.get('regularMarketPrice'))
+            if not current_price:
+                return None
+                
+            # Get options expiration dates
+            exp_dates = ticker.options
+            if not exp_dates:
+                return None
+                
+            # Find the closest expiration after earnings date
+            earnings_date = self.get_next_earnings_date(symbol)
+            if earnings_date == 'N/A':
+                # Use the nearest expiration
+                nearest_exp = exp_dates[0]
+            else:
+                earnings_dt = datetime.strptime(earnings_date, '%Y-%m-%d')
+                nearest_exp = None
+                for exp_date in exp_dates:
+                    exp_dt = datetime.strptime(exp_date, '%Y-%m-%d')
+                    if exp_dt >= earnings_dt:
+                        nearest_exp = exp_date
+                        break
+                if not nearest_exp:
+                    nearest_exp = exp_dates[0]
+            
+            # Get options chain for the expiration
+            options_chain = ticker.option_chain(nearest_exp)
+            calls = options_chain.calls
+            puts = options_chain.puts
+            
+            if calls.empty or puts.empty:
+                return None
+                
+            # Find At-The-Money (ATM) options
+            atm_call = calls.iloc[(calls['strike'] - current_price).abs().argsort()[:1]]
+            atm_put = puts.iloc[(puts['strike'] - current_price).abs().argsort()[:1]]
+            
+            if atm_call.empty or atm_put.empty:
+                return None
+                
+            # Get implied volatilities
+            call_iv = atm_call['impliedVolatility'].iloc[0] * 100  # Convert to percentage
+            put_iv = atm_put['impliedVolatility'].iloc[0] * 100
+            avg_iv = (call_iv + put_iv) / 2
+            
+            # Calculate expected move using straddle pricing
+            call_price = atm_call['lastPrice'].iloc[0]
+            put_price = atm_put['lastPrice'].iloc[0]
+            straddle_price = call_price + put_price
+            
+            # Expected move = Straddle price / Stock price * 100
+            expected_move_percent = (straddle_price / current_price) * 100
+            expected_move_dollar = straddle_price
+            
+            # Calculate days to expiration
+            exp_dt = datetime.strptime(nearest_exp, '%Y-%m-%d')
+            days_to_exp = (exp_dt - datetime.now()).days
+            
+            # Get historical volatility for comparison
+            hist_data = ticker.history(period="30d")
+            if not hist_data.empty:
+                returns = hist_data['Close'].pct_change().dropna()
+                historical_vol = returns.std() * np.sqrt(252) * 100  # Annualized
+            else:
+                historical_vol = None
+                
+            return {
+                'symbol': symbol,
+                'current_price': round(current_price, 2),
+                'expiration_date': nearest_exp,
+                'days_to_expiration': days_to_exp,
+                'implied_volatility': round(avg_iv, 2),
+                'call_iv': round(call_iv, 2),
+                'put_iv': round(put_iv, 2),
+                'historical_volatility': round(historical_vol, 2) if historical_vol else None,
+                'iv_rank': round((avg_iv - historical_vol), 2) if historical_vol else None,
+                'expected_move_percent': round(expected_move_percent, 2),
+                'expected_move_dollar': round(expected_move_dollar, 2),
+                'expected_move_up': round(current_price + expected_move_dollar, 2),
+                'expected_move_down': round(current_price - expected_move_dollar, 2),
+                'straddle_price': round(straddle_price, 2),
+                'atm_strike': atm_call['strike'].iloc[0],
+                'earnings_date': earnings_date
+            }
+            
+        except Exception as e:
+            print(f"Error getting IV data for {symbol}: {e}")
+            return None
+
+    def get_iv_crush_estimate(self, symbol):
+        """
+        Estimate potential IV crush after earnings
+        
+        Args:
+            symbol: Stock symbol
+            
+        Returns:
+            dict: IV crush estimates
+        """
+        try:
+            # Get current IV data
+            iv_data = self.get_options_iv_data(symbol)
+            if not iv_data:
+                return None
+                
+            current_iv = iv_data['implied_volatility']
+            historical_vol = iv_data['historical_volatility']
+            
+            if not historical_vol:
+                # Use industry average if no historical data
+                historical_vol = 25  # Rough market average
+                
+            # Estimate post-earnings IV (typically drops to near historical vol)
+            post_earnings_iv = historical_vol * 1.1  # Usually slightly above historical
+            
+            # Calculate IV crush
+            iv_crush_percent = ((current_iv - post_earnings_iv) / current_iv) * 100
+            
+            # Estimate option value impact (rough approximation)
+            # Options typically lose 20-50% of value due to IV crush
+            option_value_loss = min(50, max(20, iv_crush_percent * 0.8))
+            
+            return {
+                'symbol': symbol,
+                'pre_earnings_iv': round(current_iv, 2),
+                'estimated_post_earnings_iv': round(post_earnings_iv, 2),
+                'iv_crush_percent': round(iv_crush_percent, 2),
+                'estimated_option_value_loss': round(option_value_loss, 2)
+            }
+            
+        except Exception as e:
+            print(f"Error calculating IV crush for {symbol}: {e}")
+            return None
+    
     def filter_earnings_by_week(self, start_date, end_date):
         """
         Filter earnings data to only include companies with earnings in the specified week
@@ -287,17 +530,22 @@ class EarningsBot:
                 
         return filtered_earnings
     
-    def fetch_weekly_earnings(self, target_date=None):
+    def fetch_weekly_earnings(self, target_date=None, use_parallel=True, max_workers=10):
         """
         Fetch all companies with earnings for a specific week
         
         Args:
             target_date: datetime object or None (defaults to current week)
+            use_parallel: Whether to use parallel processing
+            max_workers: Maximum number of concurrent threads
             
         Returns:
             dict: Dictionary with earnings data and metadata
         """
         print("Starting earnings data collection...")
+        
+        print("Starting earnings data collection...")
+        start_time = time.time()
         
         # Get week range
         start_date, end_date = self.get_week_range(target_date)
@@ -307,13 +555,21 @@ class EarningsBot:
         symbols = self.load_tickers_from_json()
         print(f"Retrieved {len(symbols)} stock symbols")
         
-        # Fetch earnings data for each symbol
-        self.earnings_data = []
-        for i, symbol in enumerate(symbols):
-            print(f"Processing {symbol} ({i+1}/{len(symbols)})")
-            earnings_info = self.get_earnings_for_symbol(symbol)
-            if earnings_info:
-                self.earnings_data.append(earnings_info)
+        # Fetch earnings data (parallel or sequential)
+        if use_parallel:
+            print(f"Using parallel processing with {max_workers} workers...")
+            self.earnings_data = self.fetch_earnings_parallel(symbols, max_workers)
+        else:
+            print("Using sequential processing...")
+            self.earnings_data = []
+            for i, symbol in enumerate(symbols):
+                print(f"Processing {symbol} ({i+1}/{len(symbols)})")
+                earnings_info = self.get_earnings_for_symbol(symbol)
+                if earnings_info:
+                    self.earnings_data.append(earnings_info)
+        
+        elapsed_time = time.time() - start_time
+        print(f"Data collection completed in {elapsed_time:.2f} seconds")
         
         # Filter by week
         weekly_earnings = self.filter_earnings_by_week(start_date, end_date)
