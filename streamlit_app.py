@@ -62,7 +62,7 @@ def setup_sidebar():
     st.sidebar.title("📊 Navigation")
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["📅 Weekly Earnings Calendar", "📊 All Tickers Data", "🔄 Sync Data", " Options IV Analysis"]
+        ["📅 Weekly Earnings Calendar", "📊 All Tickers Data", "🔄 Sync Data", "📊 Options IV Analysis"]
     )
     
     # Week navigation controls (only for calendar page)
@@ -112,7 +112,7 @@ def route_to_page(page):
         all_tickers_data()
     elif page == "🔄 Sync Data":
         sync_data()
-    elif page == " Options IV Analysis":
+    elif page == "📊 Options IV Analysis":
         options_iv_analysis()
 
 
