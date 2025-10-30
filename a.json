@@ -1,0 +1,76 @@
+{
+  "metadata": {
+    "description": "Custom ticker symbols for earnings tracking",
+    "last_updated": "2025-10-30",
+    "total_count": 301,
+    "categories": {
+      "mega_cap": "Top 10 largest companies",
+      "tech": "Technology sector stocks",
+      "finance": "Financial sector stocks",
+      "healthcare": "Healthcare and pharma",
+      "energy": "Energy and oil companies",
+      "consumer": "Consumer goods and retail",
+      "etfs": "Exchange-traded funds",
+      "crypto": "Crypto-related stocks",
+      "growth": "High-growth stocks",
+      "speculative": "Speculative/meme stocks"
+    }
+  },
+  "tickers": {
+    "mega_cap": [
+      "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "TSLA", "META", "NVDA", "BRK.B", "UNH"
+    ],
+    "tech": [
+      "AMD", "INTC", "NFLX", "ADBE", "CRM", "ORCL", "NOW", "TEAM", "WDAY", "INTU",
+      "AVGO", "QCOM", "TWLO", "NET", "DDOG", "SNOW", "CRWD", "PANW", "ZS", "OKTA",
+      "MDB", "CFLT", "GTLB", "ASAN", "DOCU", "ZM", "ROKU", "AI", "SOUN", "BBAI",
+      "IONQ", "APP", "SMCI", "ARM", "TSM", "MRVL", "LRCX", "AMAT", "CDNS", "MU"
+    ],
+    "finance": [
+      "JPM", "BAC", "WFC", "C", "GS", "MS", "USB", "TFC", "AXP", "V",
+      "MA", "PYPL", "BX", "KRE", "XLF"
+    ],
+    "healthcare": [
+      "UNH", "JNJ", "PFE", "MRK", "LLY", "GILD", "BIIB", "REGN", "VRTX", "MRNA",
+      "TMO", "SYK", "XLV", "CRSP", "VKTX", "SRPT", "SAVA", "DXCM", "ISRG", "ALGN"
+    ],
+    "energy": [
+      "XOM", "CVX", "BP", "VLO", "HAL", "OXY", "XLE", "CCJ", "LEU", "OKLO",
+      "CEG", "NRG", "GEV", "WMB", "ENPH", "SEDG", "RUN", "FSLR"
+    ],
+    "consumer": [
+      "PG", "KO", "PEP", "WMT", "COST", "TGT", "HD", "LOW", "MCD", "SBUX",
+      "NKE", "TJX", "ULTA", "LULU", "DIS", "CMCSA", "T", "VZ", "TMUS", "XLP",
+      "XLY", "CVS", "CHWY", "ABNB", "UBER", "LYFT", "DASH", "RCL", "CCL", "MGM",
+      "WYNN", "PENN", "DKNG", "CAKE", "WING", "CMG", "CAVA", "DNUT", "PZZA", "DPZ"
+    ],
+    "industrials": [
+      "BA", "LMT", "RTX", "CAT", "DE", "MMM", "HON", "UPS", "FDX", "XLI",
+      "CMI", "AXON", "KTOS", "RKLB", "ACHR", "ASTS"
+    ],
+    "etfs": [
+      "SPY", "QQQ", "IVV", "VTI", "IWM", "XLK", "XLV", "XLF", "XLE", "XLI",
+      "XLU", "XLP", "XLY", "XLB", "XLC", "XLRE", "GLD", "SLV", "TLT", "HYG",
+      "SDY", "VUG", "ARKK", "SMH", "KWEB", "FXI", "IBIT", "DIA"
+    ],
+    "crypto_related": [
+      "COIN", "MARA", "RIOT", "HUT", "CLSK", "IREN", "GLXY", "BULL", "WULF"
+    ],
+    "growth_stocks": [
+      "SHOP", "PATH", "SOFI", "AFRM", "FIVE", "ETSY", "W", "RH", "OPEN", "Z",
+      "CVNA", "TOST", "GRAB", "SE", "CPNG", "PDD", "JD", "BIDU", "BABA", "FUTU",
+      "NU", "MELI", "PINS", "SNAP", "RDDT", "DUOL", "HIMS", "CELH", "ELF", "CLOV",
+      "UPST", "LMND", "OSCR", "HOOD", "FVRR", "UPWK", "U", "RIVN", "LCID", "NIO"
+    ],
+    "speculative": [
+      "GME", "AMC", "BB", "SPCE", "RKT", "RBLX", "PLTR", "WBD", "FUBO", "PTON",
+      "NVAX", "QS", "BLNK", "PLUG", "SBET", "FIG", "LMND", "MVST", "PCT", "UPXI",
+      "ALAB", "CRCL", "WOLF", "GPRO", "TLRY", "JKS", "TQQQ", "SQQQ", "UVXY", "XYZ",
+      "DJT", "RGTI", "RR", "CART", "ALIT", "PRI", "BE", "DHI", "LEN", "PHM",
+      "KHC", "BYND", "WW", "EXPE", "TEM", "STLD", "CROX", "UAL", "DAL", "DELL",
+      "DBX", "STT", "HPQ", "UNM", "TXN", "FCX", "VALE", "ON", "SYM", "EL",
+      "TTWO", "EA", "CRVW", "NBIS", "IDCC", "ANET", "VLO", "FSLR", "WULF",
+      "BMNR", "ASAN", "SAVA", "FUTU", "BMNR", "CRCL", "WOLF", "GPRO", "TLRY"
+    ]
+  }
+}
