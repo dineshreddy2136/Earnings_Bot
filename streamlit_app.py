@@ -10,6 +10,7 @@ from pages.weekly_calendar import weekly_earnings_calendar
 from pages.all_tickers import all_tickers_data
 from pages.sync_page import sync_data
 from pages.options_iv import options_iv_analysis
+from pages.email_alerts import email_alerts
 
 # Page configuration
 st.set_page_config(
@@ -62,7 +63,7 @@ def setup_sidebar():
     st.sidebar.title("📊 Navigation")
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["📅 Weekly Earnings Calendar", "📊 All Tickers Data", "🔄 Sync Data", "📊 Options IV Analysis"]
+        ["📅 Weekly Earnings Calendar", "📊 All Tickers Data", "🔄 Sync Data", "📊 Options IV Analysis", "📧 Email Alerts"]
     )
     
     # Week navigation controls (only for calendar page)
@@ -114,6 +115,8 @@ def route_to_page(page):
         sync_data()
     elif page == "📊 Options IV Analysis":
         options_iv_analysis()
+    elif page == "📧 Email Alerts":
+        email_alerts()
 
 
 if __name__ == "__main__":

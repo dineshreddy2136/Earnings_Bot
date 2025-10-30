@@ -56,3 +56,16 @@ ui:
   page_title: "Complete Earnings Dashboard"
   page_icon: "📊"
   layout: "wide"
+
+# Email Settings
+email:
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+  # Configure your email credentials below
+  sender_email: "dineshreddyk2136@gmail.com"  # Replace with your Gmail
+  sender_password: "kwsbbrbleccgixsa"  # Replace with your 16-char App Password
+  # Multiple recipients - add as many as needed
+  recipients:
+    - "dineshreddyk569@gmail.com"
+    - "dineshreddykankanala1@gmail.com"
+    # - "recipient3@example.com"
