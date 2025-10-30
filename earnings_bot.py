@@ -358,12 +358,13 @@ class EarningsBot:
     def get_options_iv_data(self, symbol):
         """
         Get implied volatility and expected move data for earnings plays
+        Includes IV Rank and IV Percentile calculations
         
         Args:
             symbol: Stock symbol
             
         Returns:
-            dict: IV data including expected move
+            dict: IV data including expected move, IV rank, and IV percentile
         """
         try:
             ticker = yf.Ticker(symbol)
@@ -441,6 +442,38 @@ class EarningsBot:
                 historical_vol = returns.std() * np.sqrt(252) * 100  # Annualized
             else:
                 historical_vol = None
+            
+            # Calculate IV Rank and IV Percentile using 52-week historical data
+            iv_rank_52week = None
+            iv_percentile = None
+            iv_52week_high = None
+            iv_52week_low = None
+            
+            try:
+                # Get 1 year of historical data to calculate historical IV range
+                hist_data_1y = ticker.history(period="1y")
+                
+                if not hist_data_1y.empty and len(hist_data_1y) > 30:
+                    # Calculate 30-day rolling historical volatility for the past year
+                    returns_1y = hist_data_1y['Close'].pct_change().dropna()
+                    
+                    # Calculate rolling 30-day volatility (annualized)
+                    rolling_vol = returns_1y.rolling(window=30).std() * np.sqrt(252) * 100
+                    rolling_vol = rolling_vol.dropna()
+                    
+                    if len(rolling_vol) > 0:
+                        iv_52week_high = rolling_vol.max()
+                        iv_52week_low = rolling_vol.min()
+                        
+                        # IV Rank = (Current IV - 52 Week Low) / (52 Week High - 52 Week Low)
+                        if iv_52week_high > iv_52week_low:
+                            iv_rank_52week = ((avg_iv - iv_52week_low) / (iv_52week_high - iv_52week_low)) * 100
+                        
+                        # IV Percentile = Percentage of days where IV was below current IV
+                        iv_percentile = (rolling_vol < avg_iv).sum() / len(rolling_vol) * 100
+                        
+            except Exception as e:
+                print(f"Could not calculate IV Rank/Percentile for {symbol}: {e}")
                 
             return {
                 'symbol': symbol,
@@ -452,6 +485,10 @@ class EarningsBot:
                 'put_iv': round(put_iv, 2),
                 'historical_volatility': round(historical_vol, 2) if historical_vol else None,
                 'iv_rank': round((avg_iv - historical_vol), 2) if historical_vol else None,
+                'iv_rank_52week': round(iv_rank_52week, 2) if iv_rank_52week is not None else None,
+                'iv_percentile': round(iv_percentile, 2) if iv_percentile is not None else None,
+                'iv_52week_high': round(iv_52week_high, 2) if iv_52week_high is not None else None,
+                'iv_52week_low': round(iv_52week_low, 2) if iv_52week_low is not None else None,
                 'expected_move_percent': round(expected_move_percent, 2),
                 'expected_move_dollar': round(expected_move_dollar, 2),
                 'expected_move_up': round(current_price + expected_move_dollar, 2),

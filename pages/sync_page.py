@@ -2,6 +2,7 @@
 import streamlit as st
 from earnings_bot import EarningsBot
 from utils.data_access import get_database_stats
+from utils.config_loader import config
 
 
 def sync_data():
@@ -73,11 +74,13 @@ def _full_sync_section():
 def _quick_sync_section():
     """Quick sync section"""
     st.markdown("### ⚡ Quick Sync")
-    st.info("Process top 20 major companies for quick testing and immediate results.")
-    major_tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC', 
-                    'CRM', 'ORCL', 'ADBE', 'PYPL', 'UBER', 'ABNB', 'COIN', 'SQ', 'ROKU', 'ZOOM']
     
-    if st.button("⚡ Quick Sync (20 tickers)", type="secondary"):
+    # Get major tickers from config
+    major_tickers = config.sync_major_tickers
+    
+    st.info(f"Process top {len(major_tickers)} major companies for quick testing and immediate results.")
+    
+    if st.button(f"⚡ Quick Sync ({len(major_tickers)} tickers)", type="secondary"):
         with st.spinner("Quick sync in progress..."):
             progress_bar = st.progress(0)
             status_text = st.empty()

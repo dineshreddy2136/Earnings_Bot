@@ -1,0 +1,23 @@
+# Core Dependencies
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Financial Data
+yfinance>=0.2.28
+
+# Visualization
+plotly>=5.17.0
+
+# Web Scraping (for economic calendar)
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+
+# Configuration
+pyyaml>=6.0
+
+# Timezone Support
+pytz>=2023.3
+
+# Database (built-in with Python, but listing for clarity)
+# sqlite3 - included with Python standard library

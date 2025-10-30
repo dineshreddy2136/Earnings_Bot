@@ -82,6 +82,10 @@ class EarningsDatabase:
                     put_iv REAL,
                     historical_volatility REAL,
                     iv_rank REAL,
+                    iv_rank_52week REAL,
+                    iv_percentile REAL,
+                    iv_52week_high REAL,
+                    iv_52week_low REAL,
                     expected_move_percent REAL,
                     expected_move_dollar REAL,
                     expected_move_up REAL,
@@ -96,7 +100,30 @@ class EarningsDatabase:
                 )
             ''')
             
-            # Create index for options table
+            # Add new columns if they don't exist (for existing databases)
+            try:
+                cursor.execute("SELECT iv_rank_52week FROM options_data LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE options_data ADD COLUMN iv_rank_52week REAL")
+                print("Added iv_rank_52week column to options_data table")
+            
+            try:
+                cursor.execute("SELECT iv_percentile FROM options_data LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE options_data ADD COLUMN iv_percentile REAL")
+                print("Added iv_percentile column to options_data table")
+            
+            try:
+                cursor.execute("SELECT iv_52week_high FROM options_data LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE options_data ADD COLUMN iv_52week_high REAL")
+                print("Added iv_52week_high column to options_data table")
+            
+            try:
+                cursor.execute("SELECT iv_52week_low FROM options_data LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE options_data ADD COLUMN iv_52week_low REAL")
+                print("Added iv_52week_low column to options_data table")
             cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_options_symbol 
                 ON options_data(symbol)
@@ -379,16 +406,19 @@ class EarningsDatabase:
                         INSERT INTO options_data 
                         (symbol, current_price, expiration_date, days_to_expiration,
                          implied_volatility, call_iv, put_iv, historical_volatility,
-                         iv_rank, expected_move_percent, expected_move_dollar,
+                         iv_rank, iv_rank_52week, iv_percentile, iv_52week_high, iv_52week_low,
+                         expected_move_percent, expected_move_dollar,
                          expected_move_up, expected_move_down, straddle_price,
                          atm_strike, iv_crush_percent, estimated_option_value_loss,
                          earnings_date, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         data['symbol'], data.get('current_price'), data.get('expiration_date'),
                         data.get('days_to_expiration'), data.get('implied_volatility'),
                         data.get('call_iv'), data.get('put_iv'), data.get('historical_volatility'),
-                        data.get('iv_rank'), data.get('expected_move_percent'),
+                        data.get('iv_rank'), data.get('iv_rank_52week'), data.get('iv_percentile'),
+                        data.get('iv_52week_high'), data.get('iv_52week_low'),
+                        data.get('expected_move_percent'),
                         data.get('expected_move_dollar'), data.get('expected_move_up'),
                         data.get('expected_move_down'), data.get('straddle_price'),
                         data.get('atm_strike'), data.get('iv_crush_percent'),

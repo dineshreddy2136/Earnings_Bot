@@ -1,0 +1,58 @@
+# Earnings Bot Configuration File
+
+# Data Synchronization Settings
+sync:
+  # Major tickers for quick sync (top companies for testing)
+  major_tickers:
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - TSLA
+    - META
+    - NVDA
+    - NFLX
+    - AMD
+    - INTC
+    - CRM
+    - ORCL
+    - ADBE
+    - PYPL
+    - UBER
+    - ABNB
+    - COIN
+    - SQ
+    - ROKU
+    - ZOOM
+  
+  # Parallel processing settings
+  max_workers: 10
+  
+  # Retry settings
+  max_retries: 3
+  retry_delay: 1  # seconds
+
+# Database Settings
+database:
+  path: 'earnings.db'
+  
+# Cache Settings (in seconds)
+cache:
+  ttl: 300  # 5 minutes
+
+# Options Analysis Settings
+options:
+  # Minimum IV threshold for "high IV" classification
+  high_iv_threshold: 50.0
+  
+  # Days to look ahead for options expiration
+  max_days_to_expiration: 60
+  
+  # Historical data period for IV calculations
+  iv_history_days: 252  # ~1 year of trading days
+
+# UI Settings
+ui:
+  page_title: "Complete Earnings Dashboard"
+  page_icon: "📊"
+  layout: "wide"

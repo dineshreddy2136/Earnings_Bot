@@ -69,7 +69,7 @@ def _filter_future_earnings(options_df):
 
 def _display_metrics(options_df):
     """Display key metrics"""
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Upcoming Earnings", len(options_df))
     with col2:
@@ -79,6 +79,13 @@ def _display_metrics(options_df):
         avg_expected_move = options_df['expected_move_percent'].mean()
         st.metric("Avg Expected Move", f"{avg_expected_move:.1f}%", help="Average expected move for upcoming earnings")
     with col4:
+        # Calculate average IV Rank if available
+        if 'iv_rank_52week' in options_df.columns:
+            avg_iv_rank = options_df['iv_rank_52week'].mean()
+            st.metric("Avg IV Rank", f"{avg_iv_rank:.1f}%", help="Average IV Rank (52-week)")
+        else:
+            st.metric("Avg IV Rank", "N/A", help="IV Rank not available")
+    with col5:
         high_iv_count = len(options_df[options_df['implied_volatility'] > 50])
         st.metric("High IV (>50%)", high_iv_count, help="High volatility upcoming earnings")
 
@@ -182,7 +189,7 @@ def _display_options_table(filtered_df):
     
     display_columns = [
         'symbol', 'company_name', 'current_price', 'earnings_date', 'days_to_expiration',
-        'implied_volatility', 'expected_move_percent', 'expected_move_dollar',
+        'implied_volatility', 'iv_rank_52week', 'iv_percentile', 'expected_move_percent', 'expected_move_dollar',
         'expected_move_up', 'expected_move_down', 'sector'
     ]
     
@@ -201,6 +208,8 @@ def _display_options_table(filtered_df):
             "earnings_date": st.column_config.TextColumn("Earnings Date", width="medium"),
             "days_to_expiration": st.column_config.NumberColumn("Days to Exp", width="small"),
             "implied_volatility": st.column_config.NumberColumn("IV%", format="%.1f%%", width="small"),
+            "iv_rank_52week": st.column_config.NumberColumn("IV Rank", format="%.1f%%", width="small", help="IV Rank over 52 weeks"),
+            "iv_percentile": st.column_config.NumberColumn("IV %ile", format="%.1f%%", width="small", help="IV Percentile over 52 weeks"),
             "expected_move_percent": st.column_config.NumberColumn("Expected Move%", format="%.1f%%", width="small"),
             "expected_move_dollar": st.column_config.NumberColumn("Expected Move $", format="$%.2f", width="small"),
             "expected_move_up": st.column_config.NumberColumn("Expected Up", format="$%.2f", width="small"),
@@ -208,11 +217,76 @@ def _display_options_table(filtered_df):
             "sector": st.column_config.TextColumn("Sector", width="medium")
         }
     )
+    
+    # Add expandable details section for IV context
+    with st.expander("ℹ️ Understanding IV Rank and IV Percentile"):
+        st.markdown("""
+        **IV Rank** measures where current IV stands relative to its 52-week range:
+        - Formula: `(Current IV - 52-week Low) / (52-week High - 52-week Low) × 100`
+        - **0%** = Current IV is at the lowest point of the past year
+        - **50%** = Current IV is in the middle of its 52-week range
+        - **100%** = Current IV is at the highest point of the past year
+        
+        **IV Percentile** shows what percentage of days had IV below the current level:
+        - **95%ile** = Current IV is higher than 95% of the past year's values
+        - **50%ile** = Current IV is at the median
+        - **5%ile** = Current IV is lower than 95% of the past year's values
+        
+        **💡 Trading Insights:**
+        - High IV Rank/Percentile (>75%) = Volatility is expensive, consider selling premium
+        - Low IV Rank/Percentile (<25%) = Volatility is cheap, consider buying premium
+        - Mid-range (25-75%) = Normal volatility levels
+        """)
+
 
 
 def _display_charts(filtered_df):
     """Display analysis charts"""
     st.markdown("## 📈 IV Analysis Charts")
+    
+    # First row: IV Rank vs IV Percentile scatter (if data available)
+    if 'iv_rank_52week' in filtered_df.columns and 'iv_percentile' in filtered_df.columns:
+        # Filter out N/A values
+        iv_metrics_df = filtered_df[
+            (filtered_df['iv_rank_52week'] != 'N/A') & 
+            (filtered_df['iv_percentile'] != 'N/A')
+        ].copy()
+        
+        if not iv_metrics_df.empty:
+            st.markdown("### 📊 IV Rank vs IV Percentile")
+            fig_iv_metrics = px.scatter(
+                iv_metrics_df,
+                x='iv_rank_52week',
+                y='iv_percentile',
+                color='implied_volatility',
+                size='expected_move_percent',
+                hover_data=['symbol', 'company_name', 'earnings_date', 'current_price'],
+                title='IV Rank vs IV Percentile (sized by Expected Move %)',
+                labels={
+                    'iv_rank_52week': 'IV Rank (%)',
+                    'iv_percentile': 'IV Percentile (%)',
+                    'implied_volatility': 'IV (%)',
+                    'expected_move_percent': 'Expected Move %'
+                }
+            )
+            # Add quadrant lines
+            fig_iv_metrics.add_hline(y=50, line_dash="dash", line_color="gray", opacity=0.5)
+            fig_iv_metrics.add_vline(x=50, line_dash="dash", line_color="gray", opacity=0.5)
+            fig_iv_metrics.update_layout(height=500)
+            st.plotly_chart(fig_iv_metrics, use_container_width=True)
+            
+            # Add interpretation guide
+            col1, col2 = st.columns(2)
+            with col1:
+                st.info("""
+                **Top Right Quadrant (High IV Rank & Percentile):**  
+                🔴 Expensive volatility - Consider selling premium
+                """)
+            with col2:
+                st.info("""
+                **Bottom Left Quadrant (Low IV Rank & Percentile):**  
+                🟢 Cheap volatility - Consider buying premium
+                """)
     
     # Expected Move $ vs Stock Price (expanded full width)
     st.markdown("### 💰 Expected Move $ vs Stock Price")
