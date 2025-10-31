@@ -286,7 +286,7 @@ def _create_html_email(earnings_df, start_date, end_date, time_period, options_d
     html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4;">
-        <div style="max-width: 800px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 5px;">
+        <div style="max-width: 1200px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 5px;">
           
           <h2 style="color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">
             Earnings Report: {time_period}
