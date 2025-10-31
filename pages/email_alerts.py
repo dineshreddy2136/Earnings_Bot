@@ -212,7 +212,7 @@ def _send_earnings_report(earnings_df, start_date, end_date, time_period, includ
                 options_data = _get_options_data_for_symbols(earnings_df['symbol'].tolist())
             
             # Create email content
-            subject = f" ATTENTION: {len(earnings_df)} Earnings Reported | {start_date.strftime('%b %d')} - {end_date.strftime('%b %d')}"
+            subject = f" ATTENTION: {len(earnings_df)} Earnings Ahead | {start_date.strftime('%b %d')} - {end_date.strftime('%b %d')}"
             
             if use_html:
                 body = _create_html_email(earnings_df, start_date, end_date, time_period, options_data)
