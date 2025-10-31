@@ -212,7 +212,7 @@ def _send_earnings_report(earnings_df, start_date, end_date, time_period, includ
                 options_data = _get_options_data_for_symbols(earnings_df['symbol'].tolist())
             
             # Create email content
-            subject = f"� {len(earnings_df)} Earnings This Week | {start_date.strftime('%b %d')} - {end_date.strftime('%b %d')}"
+            subject = f" ATTENTION: {len(earnings_df)} Earnings Reported | {start_date.strftime('%b %d')} - {end_date.strftime('%b %d')}"
             
             if use_html:
                 body = _create_html_email(earnings_df, start_date, end_date, time_period, options_data)
@@ -266,9 +266,9 @@ def _get_options_data_for_symbols(symbols):
         for _, row in all_options.iterrows():
             if row['symbol'] in symbols:
                 options_dict[row['symbol']] = {
-                    'iv_rank': row.get('iv_rank_52week'),
                     'iv_percentile': row.get('iv_percentile'),
                     'expected_move_percent': row.get('expected_move_percent'),
+                    'expected_move_dollar': row.get('expected_move_dollar'),
                     'expected_move_up': row.get('expected_move_up'),
                     'expected_move_down': row.get('expected_move_down')
                 }
@@ -311,8 +311,8 @@ def _create_html_email(earnings_df, start_date, end_date, time_period, options_d
     
     if options_data:
         html += """
-                <th style="padding: 10px; text-align: center;">IV Rank</th>
-                <th style="padding: 10px; text-align: right;">Exp. Move</th>
+                <th style="padding: 10px; text-align: right;">Exp. Move %</th>
+                <th style="padding: 10px; text-align: right;">Exp. Move $</th>
 """
     
     html += """
@@ -347,18 +347,18 @@ def _create_html_email(earnings_df, start_date, end_date, time_period, options_d
         if options_data:
             if symbol in options_data:
                 opt = options_data[symbol]
-                iv_rank = opt.get('iv_rank')
-                exp_move = opt.get('expected_move_percent')
+                exp_move_pct = opt.get('expected_move_percent')
+                exp_move_dollar = opt.get('expected_move_dollar')
                 
-                iv_display = f"{iv_rank:.0f}%" if iv_rank else '-'
-                move_display = f"±{exp_move:.1f}%" if exp_move else '-'
+                move_pct_display = f"±{exp_move_pct:.1f}%" if exp_move_pct else '-'
+                move_dollar_display = f"±${exp_move_dollar:.2f}" if exp_move_dollar else '-'
             else:
-                iv_display = '-'
-                move_display = '-'
+                move_pct_display = '-'
+                move_dollar_display = '-'
             
             html += f"""
-                <td style="padding: 10px; text-align: center;">{iv_display}</td>
-                <td style="padding: 10px; text-align: right;">{move_display}</td>
+                <td style="padding: 10px; text-align: right;">{move_pct_display}</td>
+                <td style="padding: 10px; text-align: right;">{move_dollar_display}</td>
 """
         
         html += """
@@ -420,24 +420,24 @@ EPS Estimate:     {eps}
         
         if options_data and symbol in options_data:
             opt = options_data[symbol]
-            iv_rank = opt.get('iv_rank')
             iv_percentile = opt.get('iv_percentile')
-            exp_move = opt.get('expected_move_percent')
+            exp_move_pct = opt.get('expected_move_percent')
+            exp_move_dollar = opt.get('expected_move_dollar')
             exp_up = opt.get('expected_move_up')
             exp_down = opt.get('expected_move_down')
             
-            if iv_rank or exp_move:
+            if iv_percentile or exp_move_pct:
                 text += "\nOptions Analysis:\n"
-                
-                if iv_rank:
-                    iv_status = "HIGH" if iv_rank > 75 else "MEDIUM" if iv_rank > 50 else "LOW"
-                    text += f"  IV Rank:          {iv_rank:.1f}% [{iv_status}]\n"
                 
                 if iv_percentile:
                     text += f"  IV Percentile:    {iv_percentile:.1f}%\n"
                 
-                if exp_move:
-                    text += f"  Expected Move:    ±{exp_move:.1f}%\n"
+                if exp_move_pct:
+                    text += f"  Expected Move:    ±{exp_move_pct:.1f}%"
+                    if exp_move_dollar:
+                        text += f" (±${exp_move_dollar:.2f})\n"
+                    else:
+                        text += "\n"
                 
                 if exp_up and exp_down:
                     text += f"  Price Range:      ${exp_down:.2f} - ${exp_up:.2f}\n"
