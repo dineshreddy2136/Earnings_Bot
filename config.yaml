@@ -58,14 +58,13 @@ ui:
   layout: "wide"
 
 # Email Settings
+# Note: Email credentials are now stored in .env file for security
+# Copy .env.example to .env and configure your credentials there
 email:
+  use_env_file: true  # Set to false to use config below instead
   smtp_server: "smtp.gmail.com"
   smtp_port: 587
-  # Configure your email credentials below
-  sender_email: "dineshreddyk2136@gmail.com"  # Replace with your Gmail
-  sender_password: "kwsbbrbleccgixsa"  # Replace with your 16-char App Password
-  # Multiple recipients - add as many as needed
-  recipients:
-    - "dineshreddyk569@gmail.com"
-    - "dineshreddykankanala1@gmail.com"
-    # - "recipient3@example.com"
+  # Fallback values if .env file is not found
+  sender_email: ""
+  sender_password: ""
+  recipients: []
