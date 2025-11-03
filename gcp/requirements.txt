@@ -1,0 +1,22 @@
+# Cloud Function Dependencies
+# Python 3.11
+
+# Core dependencies
+functions-framework==3.*
+google-cloud-firestore==2.*
+google-cloud-secret-manager==2.*
+
+# Data fetching
+yfinance==0.2.*
+pandas==2.*
+numpy==1.*
+
+# Email
+requests==2.*
+
+# Date/time
+python-dateutil==2.*
+pytz==2023.*
+
+# Utilities
+beautifulsoup4==4.*

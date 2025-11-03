@@ -117,9 +117,9 @@ def route_to_page(page):
     """Route to the selected page"""
     if page == "📅 Weekly Earnings Calendar":
         weekly_earnings_calendar(st.session_state.week_offset)
-    elif page == "🔍 Ticker Lookup":
+    elif page == "� Ticker Lookup":
         ticker_lookup()
-    elif page == "📊 All Tickers Data":
+    elif page == "�📊 All Tickers Data":
         all_tickers_data()
     elif page == "🔄 Sync Data":
         sync_data()
